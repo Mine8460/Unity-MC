@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using static Unity.Collections.AllocatorManager;
 
 // ATTENTION : ne change jamais les valeurs existantes (elles sont écrites dans les sauvegardes).
 // Ajoute toujours les nouveaux blocs à la fin.
@@ -66,6 +67,14 @@ public enum ModelCollision
     FullBlock,  // un cube plein
 }
 
+// Comment le shader éclaire un bloc (la valeur est écrite dans l'alpha des couleurs de sommets)
+public enum LightMode : byte
+{
+    Pixel = 0,         // pixels d'ombre alignés sur la texture (cubes, modèles)
+    Block = 128,       // une seule ombre par bloc, lue au-dessus du bloc (plantes en diagonale)
+    FullBright = 255,  // ni lumière ni ombre : couleurs exactes de la texture (torche)
+}
+
 public struct BlockInfo
 {
     public BlockShape shape;
@@ -74,12 +83,14 @@ public struct BlockInfo
     public bool collidable;
     public bool cullSameType;   // pas de face entre deux blocs identiques (vitre, dalle...)
     public bool randomOffset;   // décalage aléatoire par position (herbes hautes)
+    public LightMode lightMode; // éclairage par le shader (Pixel par défaut)
     public int tileTop, tileBottom, tileSide;   // cubes et plantes
     public Element[] elements;                  // formes "Model"
     public ModelQuad[] quads;                   // modèles importés (Blockbench)
     public Box[] collisionBoxes;                // null = aucune collision
     public Box[] selectionBoxes;                // zone visée par le raycast (casser/poser), même sans collision
 }
+
 
 public static class BlockDatabase
 {
@@ -167,9 +178,9 @@ public static class BlockDatabase
         infos[(int)BlockType.AnvilRotated] = Model(RotateY(AnvilElements()), collidable: true, cullSameType: false);
 
         // Torche : fine colonne, sans collision
-        infos[(int)BlockType.Torch] = Model(
-            new[] { E(7, 0, 7, 9, 10, 9, top: 11, bottom: 11, side: 11) },
-            collidable: false, cullSameType: false);
+        infos[(int)BlockType.Torch] = WithLight(Model(
+            new[] { E(7, 0, 7, 9, 9, 9, top: 11, bottom: 11, side: 11) },
+            collidable: false, cullSameType: false), LightMode.FullBright);
     }
 
     // ------------------------------------------------------------------
@@ -271,6 +282,12 @@ public static class BlockDatabase
         tileSide = side
     };
 
+
+    static BlockInfo WithLight(BlockInfo info, LightMode mode)
+    {
+        info.lightMode = mode;
+        return info;
+    }
     static BlockInfo Plant(int tile, bool randomOffset) => new BlockInfo
     {
         shape = BlockShape.Cross,
@@ -278,6 +295,7 @@ public static class BlockDatabase
         opaque = false,
         collidable = false,
         randomOffset = randomOffset,
+        lightMode = LightMode.Block,
         tileTop = tile,
         tileBottom = tile,
         tileSide = tile,

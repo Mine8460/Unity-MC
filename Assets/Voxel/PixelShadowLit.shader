@@ -55,6 +55,7 @@ Shader "Voxel/PixelShadowLit"
                 float4 positionOS : POSITION;
                 float3 normalOS   : NORMAL;
                 float2 uv         : TEXCOORD0;
+                half4  color      : COLOR;       // alpha = mode d'éclairage (voir LightMode)
             };
 
             struct Varyings
@@ -63,6 +64,7 @@ Shader "Voxel/PixelShadowLit"
                 float3 positionWS : TEXCOORD0;
                 float3 normalWS   : TEXCOORD1;
                 float2 uv         : TEXCOORD2;
+                half   lightMode  : TEXCOORD3;   // 0 = pixels d'ombre, 0.5 = ombre par bloc, 1 = plein éclat
             };
 
             Varyings vert(Attributes IN)
@@ -71,6 +73,7 @@ Shader "Voxel/PixelShadowLit"
                 OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
                 OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
+                OUT.lightMode = IN.color.a;
                 OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
                 return OUT;
             }
@@ -109,6 +112,15 @@ Shader "Voxel/PixelShadowLit"
                 // 4) retour en unités monde + petit décalage pour éviter l'acné
                 float3 posQ = cellWS + n * (_SampleBiasPx / T);
 
+                // Plantes : une seule valeur d'ombre par bloc, lue juste AU-DESSUS de la plante.
+                // Leurs plans sont en diagonale : la grille de pixels n'a pas de sens, et lire l'ombre
+                // à côté du plan le fait se projeter une ombre à lui-même.
+                if (IN.lightMode > 0.25 && IN.lightMode < 0.75)
+                {
+                    float3 blockCell = floor(IN.positionWS - float3(0.0, 0.001, 0.0));
+                    posQ = blockCell + float3(0.5, 1.02, 0.5);
+                }
+
                 float4 shadowCoord = TransformWorldToShadowCoord(posQ);
                 Light mainLight = GetMainLight(shadowCoord);
 
@@ -119,6 +131,10 @@ Shader "Voxel/PixelShadowLit"
                 float3 lightColor = lerp(_Ambient.xxx, mainLight.color, lit);
                 float faceShade = lerp(1.0, FaceBrightness(n), _FaceShade);
                 float3 color = tex.rgb * lightColor * faceShade;
+
+                // Torche : couleurs exactes de la texture, ni lumière ni ombre
+                if (IN.lightMode > 0.75)
+                    color = tex.rgb;
 
                 return half4(color, 1);
             }
@@ -187,7 +203,7 @@ Shader "Voxel/PixelShadowLit"
 
             half4 ShadowFrag(ShadowVaryings IN) : SV_Target
             {
-                clip(SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv).a - _Cutoff);
+                clip(SAMPLE_TEXTURE2D_LOD(_BaseMap, sampler_BaseMap, IN.uv, 0).a - _Cutoff);
                 return 0;
             }
             ENDHLSL

@@ -242,6 +242,7 @@ public class Chunk : MonoBehaviour
 
         var colVerts = new List<Vector3>();
         var colTris = new List<int>();
+        var litRanges = new List<Vector3Int>();
 
         for (int x = 0; x < SizeX; x++)
             for (int y = 0; y < SizeY; y++)
@@ -254,6 +255,7 @@ public class Chunk : MonoBehaviour
                     var pos = new Vector3(x, y, z);
 
                     // ---------- Rendu ----------
+                    int vertStart = vertices.Count;
                     switch (info.shape)
                     {
                         case BlockShape.Cross:
@@ -292,29 +294,47 @@ public class Chunk : MonoBehaviour
                             break;
                     }
 
+                    if (info.lightMode != LightMode.Pixel && vertices.Count > vertStart)
+                        litRanges.Add(new Vector3Int(vertStart, vertices.Count, (int)info.lightMode));
                     // ---------- Collision (mesh utilisé pour les raycasts) ----------
-                    if (info.collisionBoxes == null) continue;
+                    //if (info.collisionBoxes == null) continue;
 
-                    if (info.shape != BlockShape.Cube && info.selectionBoxes != null)
-                    {
-                        //Vector3 off = Vector3.zero;
-                        Vector3 off = info.shape == BlockShape.Cross ? PlantOffset(info, x, z) : Vector3.zero;
-                        foreach (Box b in info.selectionBoxes)
-                        {
-                            // Reste dans le bloc pour que "point touché - normale" retombe sur la bonne case
-                            Vector3 bmin = Vector3.Max(b.min + off, Vector3.zero);
-                            Vector3 bmax = Vector3.Min(b.max + off, Vector3.one);
-                            for (int f = 0; f < 6; f++)
-                                AddBoxFace(colVerts, colTris, null, null, pos, bmin, bmax, f, 0);
-                        }
-                    }
+                    if (info.shape != BlockShape.Cube)
+                        for (int f = 0; f < 6; f++)
+                            AddBoxFace(colVerts, colTris, null, null, pos, Vector3.zero, Vector3.one, f, 0);
+                    //else if (info.shape != BlockShape.Cube && info.selectionBoxes == null)
+                    //{
+                    //        foreach (Element el in info.elements ?? NoElements)
+                    //        {
+                    //            for (int f = 0; f < 6; f++)
+                    //            {
+                    //                if (el.tiles[f] < 0) continue;
+
+                    //                // Une face posée contre le bord du bloc est inutile si le voisin la cache
+                    //                if (IsFlush(el.min, el.max, f))
+                    //                {
+                    //                    BlockType nb = GetNeighbor(x, y, z, f);
+                    //                    if (BlockDatabase.Get(nb).opaque) continue;
+                    //                    if (nb == type && info.cullSameType) continue;
+                    //                }
+
+                    //                AddBoxFace(colVerts, colTris, null, null, pos, el.min, el.max, f, 0);
+                    //            }
+                    //        }
+                    //    }
+                    //}
                 }
+        var colors = new Color32[vertices.Count];
+        foreach (Vector3Int r in litRanges)
+            for (int i = r.x; i < r.y; i++)
+                colors[i] = new Color32(255, 255, 255, (byte)r.z);
 
         mesh.Clear();
         mesh.SetVertices(vertices);
         mesh.SetTriangles(triangles, 0);
         mesh.SetNormals(normals);
         mesh.SetUVs(0, uvs);
+        mesh.SetColors(colors);
         mesh.RecalculateBounds();
         meshFilter.sharedMesh = mesh;
         IsMeshed = true;
@@ -400,7 +420,7 @@ public class Chunk : MonoBehaviour
 
         int wx = Coord.x * SizeX + x;
         int wz = Coord.y * SizeZ + z;
-        return new Vector3((Hash01(wx, wz, 1) - 0.5f) * 0.4f, 0f, (Hash01(wx, wz, 2) - 0.5f) * 0.4f);
+        return new Vector3((Hash01(wx, wz, 1) - 0.5f) * 0.36f, 0f, (Hash01(wx, wz, 2) - 0.5f) * 0.36f);
     }
 
     // Deux plans en diagonale, chacun visible des deux côtés
