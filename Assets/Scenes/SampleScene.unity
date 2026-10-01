@@ -578,7 +578,7 @@ MonoBehaviour:
   maxDataPerFrame: 4
   maxMeshPerFrame: 2
   terrainHeight: 4
-  saveToDisk: 0
+  saveToDisk: 1
   saveFileName: world.save
   autosaveInterval: 60
 --- !u!4 &628363073
