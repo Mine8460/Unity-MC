@@ -1,7 +1,7 @@
 using UnityEngine;
 
 // Joueur "à la Minecraft" : hitbox AABB qui ne tourne jamais, collision calculée
-// directement contre la grille de blocs (aucun Rigidbody, aucune friction, aucun accrochage).
+// directement contre les boîtes de collision des blocs (aucun Rigidbody, aucune friction).
 [DisallowMultipleComponent]
 public class PlayerController : MonoBehaviour
 {
@@ -21,6 +21,8 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float gravity = 32f;
     [SerializeField] float maxFallSpeed = 50f;
     [SerializeField] float respawnBelowY = -30f;
+    [Tooltip("Hauteur max montée sans sauter (0,5 = dalles ; Minecraft : 0,6)")]
+    [SerializeField] float stepHeight = 0.6f;
 
     [Header("Souris")]
     [SerializeField] float mouseSensitivity = 2f;
@@ -36,7 +38,7 @@ public class PlayerController : MonoBehaviour
     // Marge minuscule : la hitbox est testée légèrement rétrécie, ce qui évite
     // de "toucher" les blocs voisins à cause des erreurs d'arrondi.
     const float Skin = 0.0001f;
-    // Déplacement maximal par sous-étape (doit rester inférieur à 1 bloc)
+    // Déplacement maximal par sous-étape (doit rester inférieur à la largeur de la hitbox)
     const float MaxStep = 0.4f;
     // Distance sous les pieds testée pour savoir si on est au sol (indépendante du framerate)
     const float GroundProbe = 0.02f;
@@ -48,7 +50,7 @@ public class PlayerController : MonoBehaviour
     float yaw;
     float pitch;
     float jumpBuffer; // temps restant pendant lequel un appui sur saut est mémorisé
-    // (l'état "au sol" est recalculé à chaque frame dans Simulate)
+    bool wasOnGround; // au sol au début de la frame : autorise la montée automatique
 
     void Awake()
     {
@@ -68,7 +70,7 @@ public class PlayerController : MonoBehaviour
     void Update()
     {
         if (Input.GetKeyDown(KeyCode.Escape)) LockCursor(false);
-        if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked) LockCursor(true);
+        if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked && !Inventory.IsOpen) LockCursor(true);
         bool active = Cursor.lockState == CursorLockMode.Locked;
 
         if (active)
@@ -82,10 +84,6 @@ public class PlayerController : MonoBehaviour
             if (Input.GetKeyDown(jumpKey)) jumpBuffer = JumpBufferTime;
         }
 
-        if (Collides(transform.position))
-        {
-            return;
-        }
         Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
     }
 
@@ -109,7 +107,8 @@ public class PlayerController : MonoBehaviour
 
         // Au sol ? On teste juste sous les pieds : fiable quel que soit le framerate
         Vector3 pos = transform.position;
-        bool onGround = velocity.y <= 0f && Collides(pos + Vector3.down * GroundProbe);
+        bool onGround = velocity.y <= 0f && Collide(pos + Vector3.down * GroundProbe, -1, 0f, out _);
+        wasOnGround = onGround;
 
         // Saut : appui mémorisé un court instant, ou touche maintenue (comme Minecraft)
         bool wantsJump = active && (jumpBuffer > 0f || Input.GetKey(jumpKey));
@@ -142,52 +141,95 @@ public class PlayerController : MonoBehaviour
     {
         if (delta == 0f) return;
 
-        float hw = width * 0.5f;
         int steps = Mathf.CeilToInt(Mathf.Abs(delta) / MaxStep);
         float step = delta / steps;
 
         for (int i = 0; i < steps; i++)
         {
             pos[axis] += step;
-            if (!Collides(pos)) continue;
+            if (!Collide(pos, axis, step, out float snap)) continue;
 
-            // Collision : on colle la hitbox au bord du bloc et on annule la vitesse sur cet axe
-            if (axis == 1)
-            {
-                if (step > 0f) pos.y = Mathf.Floor(pos.y + height) - height;   // tête contre le plafond
-                else pos.y = Mathf.Floor(pos.y) + 1f;     // pieds sur le sol
-            }
-            else
-            {
-                if (step > 0f) pos[axis] = Mathf.Floor(pos[axis] + hw) - hw;
-                else pos[axis] = Mathf.Floor(pos[axis] - hw) + 1f + hw;
-            }
+            // Obstacle bas (dalle...) : on monte dessus sans sauter, comme dans Minecraft
+            if (axis != 1 && wasOnGround && TryStepUp(ref pos)) continue;
 
+            // Collision : on colle la hitbox contre la boîte rencontrée et on annule la vitesse sur cet axe
+            pos[axis] = snap;
             velocity[axis] = 0f;
             break;
         }
     }
 
-    // La hitbox (pieds en p) touche-t-elle au moins un bloc solide ?
-    bool Collides(Vector3 p)
+    // `pos` est la position APRÈS un déplacement horizontal bloqué (en collision). Si l'obstacle fait au plus
+    // stepHeight de haut et qu'il y a la place au-dessus, pose le joueur sur lui et renvoie true.
+    bool TryStepUp(ref Vector3 pos)
+    {
+        Vector3 lifted = pos;
+        lifted.y += stepHeight;
+        if (Collide(lifted, -1, 0f, out _)) return false; // pas la place au-dessus : mur trop haut ou plafond bas
+
+        // On redescend : la hauteur où poser les pieds est le dessus de l'obstacle
+        Vector3 probe = lifted;
+        probe.y -= stepHeight;
+        float feetY = pos.y;
+        if (Collide(probe, 1, -1f, out float surface)) feetY = Mathf.Max(pos.y, surface);
+
+        var stepped = new Vector3(pos.x, feetY, pos.z);
+        if (Collide(stepped, -1, 0f, out _)) return false;
+
+        pos = stepped;
+        return true;
+    }
+
+    // Teste la hitbox (pieds en p) contre les boîtes de collision des blocs.
+    // Si axis >= 0, calcule aussi `snap` : la position sur cet axe où coller la hitbox
+    // pour la débloquer, selon le sens du déplacement `dir`.
+    bool Collide(Vector3 p, int axis, float dir, out float snap)
     {
         float hw = width * 0.5f;
+        Vector3 min = new Vector3(p.x - hw, p.y, p.z - hw);
+        Vector3 max = new Vector3(p.x + hw, p.y + height, p.z + hw);
 
-        int x0 = Mathf.FloorToInt(p.x - hw + Skin);
-        int x1 = Mathf.FloorToInt(p.x + hw - Skin);
-        int y0 = Mathf.FloorToInt(p.y + Skin);
-        int y1 = Mathf.FloorToInt(p.y + height - Skin);
-        int z0 = Mathf.FloorToInt(p.z - hw + Skin);
-        int z1 = Mathf.FloorToInt(p.z + hw - Skin);
+        int x0 = Mathf.FloorToInt(min.x + Skin), x1 = Mathf.FloorToInt(max.x - Skin);
+        int y0 = Mathf.FloorToInt(min.y + Skin), y1 = Mathf.FloorToInt(max.y - Skin);
+        int z0 = Mathf.FloorToInt(min.z + Skin), z1 = Mathf.FloorToInt(max.z - Skin);
+
+        bool hit = false;
+        snap = dir > 0f ? float.PositiveInfinity : float.NegativeInfinity;
 
         for (int x = x0; x <= x1; x++)
-            for (int y = y0; y <= y1; y++)
-                for (int z = z0; z <= z1; z++)
-                {
-                    if (BlockDatabase.Get(world.GetBlock(x, y, z)).collidable)
-                        return true;
-                }
-        return false;
+        for (int y = y0; y <= y1; y++)
+        for (int z = z0; z <= z1; z++)
+        {
+            Box[] boxes = BlockDatabase.Get(world.GetBlock(x, y, z)).collisionBoxes;
+            if (boxes == null) continue;
+
+            var cell = new Vector3(x, y, z);
+            for (int i = 0; i < boxes.Length; i++)
+            {
+                Vector3 bmin = cell + boxes[i].min;
+                Vector3 bmax = cell + boxes[i].max;
+
+                // Chevauchement (la marge Skin ignore les simples contacts)
+                if (min.x + Skin >= bmax.x || max.x - Skin <= bmin.x) continue;
+                if (min.y + Skin >= bmax.y || max.y - Skin <= bmin.y) continue;
+                if (min.z + Skin >= bmax.z || max.z - Skin <= bmin.z) continue;
+
+                hit = true;
+                if (axis < 0) return true;
+
+                // Position qui colle la hitbox contre cette boîte ; on garde la plus restrictive
+                float candidate;
+                if (dir > 0f)
+                    candidate = bmin[axis] - (axis == 1 ? height : hw);
+                else
+                    candidate = bmax[axis] + (axis == 1 ? 0f : hw);
+
+                snap = dir > 0f ? Mathf.Min(snap, candidate) : Mathf.Max(snap, candidate);
+            }
+        }
+
+        if (!hit) snap = 0f;
+        return hit;
     }
 
     static void LockCursor(bool locked)

@@ -1,11 +1,12 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer), typeof(MeshCollider))]
-public class Chunk : MonoBehaviour
+public partial class Chunk : MonoBehaviour
 {
     public const int SizeX = 16;
-    public const int SizeY = 16;
+    public const int SizeY = 32;
     public const int SizeZ = 16;
 
     // Taille des données d'un chunk une fois sérialisé (1 octet par bloc)
@@ -261,7 +262,6 @@ public class Chunk : MonoBehaviour
                         case BlockShape.Cross:
                             AddCross(vertices, normals, uvs, triangles, pos, info, x, y, z);
                             break;
-
                         case BlockShape.Model:
                             AddModelQuads(vertices, normals, uvs, triangles, pos, info, type, x, y, z);
                             foreach (Element el in info.elements ?? NoElements)
@@ -275,14 +275,14 @@ public class Chunk : MonoBehaviour
                                     {
                                         BlockType nb = GetNeighbor(x, y, z, f);
                                         if (BlockDatabase.Get(nb).opaque) continue;
-                                        if (nb == type && info.cullSameType) continue;
+                                        if (nb == type && info.cullSameType &&
+                                            (info.flushMask & (1 << f)) != 0 && (info.flushMask & (1 << (f ^ 1))) != 0) continue;
                                     }
 
                                     AddBoxFace(vertices, triangles, normals, uvs, pos, el.min, el.max, f, el.tiles[f]);
                                 }
                             }
                             break;
-
                         default: // Cube
                             for (int f = 0; f < 6; f++)
                             {
@@ -299,35 +299,26 @@ public class Chunk : MonoBehaviour
                     // ---------- Collision (mesh utilisé pour les raycasts) ----------
                     //if (info.collisionBoxes == null) continue;
 
-                    if (info.shape != BlockShape.Cube)
-                        for (int f = 0; f < 6; f++)
-                            AddBoxFace(colVerts, colTris, null, null, pos, Vector3.zero, Vector3.one, f, 0);
-                    //else if (info.shape != BlockShape.Cube && info.selectionBoxes == null)
-                    //{
-                    //        foreach (Element el in info.elements ?? NoElements)
-                    //        {
-                    //            for (int f = 0; f < 6; f++)
-                    //            {
-                    //                if (el.tiles[f] < 0) continue;
-
-                    //                // Une face posée contre le bord du bloc est inutile si le voisin la cache
-                    //                if (IsFlush(el.min, el.max, f))
-                    //                {
-                    //                    BlockType nb = GetNeighbor(x, y, z, f);
-                    //                    if (BlockDatabase.Get(nb).opaque) continue;
-                    //                    if (nb == type && info.cullSameType) continue;
-                    //                }
-
-                    //                AddBoxFace(colVerts, colTris, null, null, pos, el.min, el.max, f, 0);
-                    //            }
-                    //        }
-                    //    }
-                    //}
+                    Vector3 off = info.shape == BlockShape.Cross ? PlantOffset(info, x, z) : Vector3.zero;
+                    if (info.shape != BlockShape.Cube && info.selectionBoxes != null)
+                    {
+                        foreach (Box b in info.selectionBoxes)
+                        {
+                            Vector3 bmin = Vector3.Max(b.min + off, Vector3.zero);
+                            Vector3 bmax = Vector3.Min(b.max + off, Vector3.one);
+                            for (int f = 0; f < 6; f++)
+                                AddBoxFace(colVerts, colTris, null, null, pos, bmin, bmax, f, 0);
+                        }
+                        //break;
+                    }
                 }
+
         var colors = new Color32[vertices.Count];
         foreach (Vector3Int r in litRanges)
             for (int i = r.x; i < r.y; i++)
                 colors[i] = new Color32(255, 255, 255, (byte)r.z);
+
+        ApplyVertexLight(vertices, normals, colors);
 
         mesh.Clear();
         mesh.SetVertices(vertices);
@@ -472,5 +463,10 @@ public class Chunk : MonoBehaviour
 
         tris.Add(start); tris.Add(start + 1); tris.Add(start + 2);
         tris.Add(start); tris.Add(start + 2); tris.Add(start + 3);
+    }
+
+    public static Vector3 PlantOffsetAt(int worldX, int worldZ)
+    {
+        return new Vector3((Hash01(worldX, worldZ, 1) - 0.5f) * 0.36f, 0f, (Hash01(worldX, worldZ, 2) - 0.5f) * 0.36f);
     }
 }

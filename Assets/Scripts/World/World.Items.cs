@@ -1,0 +1,103 @@
+using UnityEngine;
+using UnityEngine.LightTransport;
+
+// Objets au sol, casse de blocs qui lâche des objets, atterrissage des blocs qui tombent.
+// (Partie de la classe World.)
+public partial class World
+{
+    [Header("Objets")]
+    [Tooltip("Inventaire du joueur (trouvé automatiquement s'il est vide)")]
+    [SerializeField] Inventory playerInventory;
+
+    bool inventorySearched;
+
+    public Material ChunkMaterial => chunkMaterial;
+
+    // L'atlas de textures (pour dessiner les icônes de l'interface)
+    public Texture AtlasTexture => chunkMaterial != null ? chunkMaterial.GetTexture("_BaseMap") : null;
+
+    public Inventory PlayerInventory
+    {
+        get
+        {
+            if (playerInventory == null && !inventorySearched)
+            {
+                inventorySearched = true;
+#if UNITY_2023_1_OR_NEWER
+                playerInventory = FindFirstObjectByType<Inventory>();
+#else
+                playerInventory = FindObjectOfType<Inventory>();
+#endif
+            }
+            return playerInventory;
+        }
+    }
+
+    // Mesh d'un bloc seul (objets au sol, blocs qui tombent, icônes). Partagé entre toutes les entités.
+    public Mesh GetBlockMesh(BlockType type) => GetFallingMesh(type);
+
+    // Fait apparaître un objet. `position` = centre du bas de sa boîte de collision.
+    public ItemEntity DropItem(BlockType type, int count, Vector3 position, Vector3 velocity, float pickupDelay = 0.5f)
+    {
+        if (type == BlockType.Air || count <= 0) return null;
+
+        var go = new GameObject("Item " + type);
+        go.transform.SetParent(transform);
+        go.transform.position = position;
+
+        var item = go.AddComponent<ItemEntity>();
+        item.Init(this, type, count, velocity, pickupDelay);
+        return item;
+    }
+
+    // Lâche l'objet d'un bloc cassé (selon ses règles : l'herbe donne de la terre, les feuilles rien...)
+    public void DropBlockItem(BlockType type, Vector3 position)
+    {
+        BlockInfo info = BlockDatabase.Get(type);
+        if (info.dropsNothing) return;
+
+        BlockType item = info.dropOverride != BlockType.Air ? info.dropOverride : type;
+        var velocity = new Vector3(Random.Range(-1f, 1f), Random.Range(2.5f, 3.5f), Random.Range(-1f, 1f));
+        DropItem(item, Mathf.Max(1, (int)info.dropCount), position, velocity);
+    }
+
+    // Casse un bloc : il disparaît et lâche son objet.
+    // À UTILISER à la place de SetBlock(..., Air) quand le JOUEUR casse un bloc.
+    public bool BreakBlock(int x, int y, int z, bool drop = true)
+    {
+        if (y < 0 || y >= Chunk.SizeY)
+            return false;
+        // FloorToInt gère correctement les coordonnées négatives
+        int cx = Mathf.FloorToInt(x / (float)Chunk.SizeX);
+        int cz = Mathf.FloorToInt(z / (float)Chunk.SizeZ);
+
+        if (!chunks.TryGetValue(new Vector2Int(cx, cz), out Chunk chunk))
+            return false; // hors du monde généré
+
+        int lx = x - cx * Chunk.SizeX;
+        int lz = z - cz * Chunk.SizeZ;
+
+        BlockType type = chunk.GetLocalBlock(lx, y, lz);
+
+        if (type == BlockType.Bedrock || type == BlockType.Air)
+            return false; // ne peut pas casser de bedrock ou d'air
+
+        if (drop) DropBlockItem(type, new Vector3(x + 0.5f, y + 0.1f, z + 0.5f));
+
+        SetBlock(x, y, z, BlockType.Air);
+        return true;
+    }
+
+    // Un bloc qui tombait arrive à destination. Si la case d'arrivée n'est pas remplaçable
+    // (torche, dalle, tabouret...), il ne peut pas se poser : il devient un objet.
+    public void LandFallingBlock(int x, int y, int z, BlockType type)
+    {
+        if (y >= 0 && y < Chunk.SizeY && BlockDatabase.Get(GetBlock(x, y, z)).replaceable)
+        {
+            SetBlock(x, y, z, type);
+            return;
+        }
+
+        DropBlockItem(type, new Vector3(x + 0.5f, y + 0.1f, z + 0.5f));
+    }
+}

@@ -8,6 +8,9 @@ Shader "Voxel/PixelShadowLit"
         _SampleBiasPx ("Bias de lecture (en pixels)", Range(0, 1)) = 0.15
         _Ambient ("Luminosité de l'ombre", Range(0, 1)) = 0.35
         _FaceShade ("Luminosité par face (0 = désactivée)", Range(0, 1)) = 0
+        _SkyBrightness ("Luminosité du ciel (1 = jour, 0.1 = nuit)", Range(0, 1)) = 1
+        _MinLight ("Lumière minimale", Range(0, 0.2)) = 0.03
+        _BlockLightColor ("Couleur de la lumière des torches", Color) = (1, 0.82, 0.55, 1)
     }
 
     SubShader
@@ -32,6 +35,9 @@ Shader "Voxel/PixelShadowLit"
             float _SampleBiasPx;
             float _Ambient;
             float _FaceShade;
+            float _SkyBrightness;
+            float _MinLight;
+            half4 _BlockLightColor;
         CBUFFER_END
         ENDHLSL
 
@@ -65,6 +71,7 @@ Shader "Voxel/PixelShadowLit"
                 float3 normalWS   : TEXCOORD1;
                 float2 uv         : TEXCOORD2;
                 half   lightMode  : TEXCOORD3;   // 0 = pixels d'ombre, 0.5 = ombre par bloc, 1 = plein éclat
+                half2  light      : TEXCOORD4;   // x = lumière des torches, y = lumière du ciel (0 à 1 pour les niveaux 0 à 15)
             };
 
             Varyings vert(Attributes IN)
@@ -74,6 +81,7 @@ Shader "Voxel/PixelShadowLit"
                 OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.lightMode = IN.color.a;
+                OUT.light = IN.color.rg;
                 OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
                 return OUT;
             }
@@ -85,6 +93,12 @@ Shader "Voxel/PixelShadowLit"
                 if (n.y < -0.5) return 0.5;   // dessous
                 if (abs(n.z) > 0.5) return 0.8; // faces Z
                 return 0.6;                   // faces X
+            }
+
+            // Luminosité d'un niveau de lumière (0 à 1 pour les niveaux 0 à 15) : chaque niveau perd 20 %, comme Minecraft
+            float LightCurve(float level01)
+            {
+                return pow(0.8, (1.0 - level01) * 15.0);
             }
 
             half4 frag(Varyings IN) : SV_Target
@@ -130,7 +144,13 @@ Shader "Voxel/PixelShadowLit"
 
                 float3 lightColor = lerp(_Ambient.xxx, mainLight.color, lit);
                 float faceShade = lerp(1.0, FaceBrightness(n), _FaceShade);
-                float3 color = tex.rgb * lightColor * faceShade;
+                // Lumière par bloc : le ciel (soleil et ombres du soleil, atténués par le niveau de ciel)
+                // et les torches (lumière chaude). On garde la plus forte des deux.
+                float3 skyColor = lightColor * (LightCurve(IN.light.y) * _SkyBrightness);
+                float3 blockColor = _BlockLightColor.rgb * LightCurve(IN.light.x);
+                float3 lighting = max(max(skyColor, blockColor), _MinLight.xxx);
+
+                float3 color = tex.rgb * lighting * faceShade;
 
                 // Torche : couleurs exactes de la texture, ni lumière ni ombre
                 if (IN.lightMode > 0.75)

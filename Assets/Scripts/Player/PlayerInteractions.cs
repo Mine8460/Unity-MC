@@ -1,10 +1,13 @@
 using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.LightTransport;
+using UnityEngine.UI;
 
 public class PlayerInteractions : MonoBehaviour
 {
     [SerializeField] private Transform camera;
+    [SerializeField] private BlockOutline outline;
     [SerializeField] private float interactionRange = 5f;
     [SerializeField] private BlockType blockToPlace = BlockType.Stone;
 
@@ -15,12 +18,23 @@ public class PlayerInteractions : MonoBehaviour
 
     void Update()
     {
-
+        BlockType type = GetBlockTypeInsideCamera();
+        if (type == BlockType.Air)
+        {
+            if (Physics.Raycast(camera.position, camera.forward, out RaycastHit hit, interactionRange))
+                outline.ShowFromHit(hit.point, hit.normal);
+            else
+                outline.Hide();
+        }
+        else
+        {
+            outline.Show(new(Mathf.FloorToInt(camera.position.x), Mathf.FloorToInt(camera.position.y), Mathf.FloorToInt(camera.position.z)));
+        }
     }
 
     public void OnBreak(InputAction.CallbackContext context)
     {
-        if (context.performed)
+        if (context.performed && !Inventory.IsOpen)
         {
             BlockType type = GetBlockTypeInsideCamera();
             if (type == BlockType.Air)
@@ -41,14 +55,21 @@ public class PlayerInteractions : MonoBehaviour
     }
     public void OnPlace(InputAction.CallbackContext context)
     {
-        if (context.performed && blockToPlace != BlockType.Bedrock)
+        if (context.performed && blockToPlace != BlockType.Bedrock && !Inventory.IsOpen)
         {
+            Inventory inventory = GetComponent<Inventory>();
+            World world = GetComponent<PlayerController>().world;
             RaycastHit hit;
             if (Physics.Raycast(camera.position, camera.forward, out hit, interactionRange))
             {
                 Vector3 point = hit.point + hit.normal * 0.02f; // Move the point slightly inside the block
-                GetComponent<PlayerController>().world.PlaceBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z), blockToPlace);
+                BlockType type = GetComponent<PlayerController>().world.GetBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z));
 
+                Vector3Int hitBlock = Vector3Int.FloorToInt(hit.point - hit.normal * 0.01f);
+                Vector3Int normal = Vector3Int.RoundToInt(hit.normal);
+                if (inventory.TryGetSelected(out BlockType selected) &&
+                    world.TryPlaceAgainst(hitBlock, normal, hit.point, selected))
+                    inventory.ConsumeSelected();
             }
         }
     }

@@ -19,6 +19,9 @@ public enum BlockType : byte
     Anvil,
     AnvilRotated,
     Torch,
+    Sand,
+    StoneSlabTop,
+    StoneDoubleSlab,
 }
 
 public enum BlockShape : byte
@@ -75,6 +78,13 @@ public enum LightMode : byte
     FullBright = 255,  // ni lumière ni ombre : couleurs exactes de la texture (torche)
 }
 
+public enum SupportRule : byte
+{
+    None,
+    SolidBelow,
+    SoilBelow,
+}
+
 public struct BlockInfo
 {
     public BlockShape shape;
@@ -83,6 +93,17 @@ public struct BlockInfo
     public bool collidable;
     public bool cullSameType;   // pas de face entre deux blocs identiques (vitre, dalle...)
     public bool randomOffset;   // décalage aléatoire par position (herbes hautes)
+    public SupportRule support;
+    public bool gravity;
+    public bool replaceable;
+    public bool isSoil;
+    public bool isPlant;
+    public byte emission; // lumière émise, de 0 à 15 (torche : 14)
+    public byte lightFilter; // lumière absorbée en traversant le bloc (feuilles : 1). Un bloc opaque bloque tout.
+    public bool dropsNothing;
+    public BlockType dropOverride;
+    public byte dropCount;
+    public byte flushMask;
     public LightMode lightMode; // éclairage par le shader (Pixel par défaut)
     public int tileTop, tileBottom, tileSide;   // cubes et plantes
     public Element[] elements;                  // formes "Model"
@@ -113,7 +134,7 @@ public static class BlockDatabase
 
     static readonly Box[] FullBox = { new Box(Vector3.zero, Vector3.one) };
 
-    static readonly Box[] PlantBox = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.9f, 1f, 0.9f)) };
+    static readonly Box[] PlantBox = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.7f, 0.6f, 0.7f)) };
 
     // Noms de tuiles : sert à retrouver la bonne tuile d'après le nom de la texture d'un modèle Blockbench
     // ("block/anvil" -> "anvil"). Une texture inconnue utilise la tuile par défaut donnée à FromBlockbench.
@@ -138,6 +159,7 @@ public static class BlockDatabase
         infos[(int)BlockType.Stone] = Solid(top: 3, bottom: 3, side: 3);
         infos[(int)BlockType.Log] = Solid(top: 7, bottom: 7, side: 6);
         infos[(int)BlockType.Bedrock] = Solid(top: 4, bottom: 4, side: 4);
+        infos[(int)BlockType.Sand] = Solid(top: 12, bottom: 12, side: 12);
 
         // Feuilles : visibles, transparentes, sans collision
         infos[(int)BlockType.Leaves] = new BlockInfo
@@ -146,6 +168,7 @@ public static class BlockDatabase
             hasMesh = true,
             opaque = false,
             collidable = true,
+            collisionBoxes = FullBox,
             tileTop = 5,
             tileBottom = 5,
             tileSide = 5
@@ -172,6 +195,10 @@ public static class BlockDatabase
         infos[(int)BlockType.StoneSlab] = Model(
             new[] { E(0, 0, 0, 16, 8, 16, top: 3, bottom: 3, side: 3) },
             collidable: true, cullSameType: true);
+        infos[(int)BlockType.StoneSlabTop] = Model(
+            new[] { E(0, 8, 0, 16, 16, 16, top: 3, bottom: 3, side: 3) },
+            collidable: true, cullSameType: true);
+        infos[(int)BlockType.StoneDoubleSlab] = Solid(top: 3, bottom: 3, side: 3);
 
         // Enclume (approximation du modèle vanilla). AnvilRotated = même modèle tourné de 90°.
         infos[(int)BlockType.Anvil] = Model(AnvilElements(), collidable: true, cullSameType: false);
@@ -181,6 +208,41 @@ public static class BlockDatabase
         infos[(int)BlockType.Torch] = WithLight(Model(
             new[] { E(7, 0, 7, 9, 9, 9, top: 11, bottom: 11, side: 11) },
             collidable: false, cullSameType: false), LightMode.FullBright);
+
+
+        // ------------------------------------------------------------------
+        // Règles des blocs : une ligne par règle, pour chaque bloc concerné
+        // ------------------------------------------------------------------
+        infos[(int)BlockType.Air].replaceable = true;
+
+        infos[(int)BlockType.Grass].isSoil = true;
+        infos[(int)BlockType.Grass].selectionBoxes = PlantBox;
+
+        infos[(int)BlockType.Dirt].isSoil = true;
+
+        infos[(int)BlockType.TallGrass].support = SupportRule.SoilBelow;   // pousse sur l'herbe ou la terre
+        infos[(int)BlockType.TallGrass].replaceable = true;
+
+        infos[(int)BlockType.Torch].support = SupportRule.SolidBelow;      // posée sur un cube plein
+        infos[(int)BlockType.Torch].emission = 14;
+
+        infos[(int)BlockType.Anvil].gravity = true;
+        infos[(int)BlockType.AnvilRotated].gravity = true;
+
+        infos[(int)BlockType.Sand].gravity = true;
+
+        infos[(int)BlockType.Leaves].lightFilter = 1;
+
+        // Objets lâchés quand le bloc est cassé
+        infos[(int)BlockType.Grass].dropOverride = BlockType.Dirt;   // l'herbe lâche de la terre
+        infos[(int)BlockType.Leaves].dropsNothing = true;
+        infos[(int)BlockType.Glass].dropsNothing = true;
+        infos[(int)BlockType.TallGrass].dropsNothing = true;
+
+        // Les dalles lâchent toujours la dalle (la seule qu'on peut avoir dans l'inventaire) : deux pour un bloc plein
+        infos[(int)BlockType.StoneSlabTop].dropOverride = BlockType.StoneSlab;
+        infos[(int)BlockType.StoneDoubleSlab].dropOverride = BlockType.StoneSlab;
+        infos[(int)BlockType.StoneDoubleSlab].dropCount = 2;
     }
 
     // ------------------------------------------------------------------
@@ -221,6 +283,27 @@ public static class BlockDatabase
             dst[i] = new Element(min, max, new[] { t[0], t[1], t[5], t[4], t[2], t[3] });
         }
         return dst;
+    }
+
+    public static int LightOpacity(BlockType type)
+    {
+        var info = infos[(int)type];
+        return info.opaque ? 15 : info.lightFilter;
+    }
+
+    // Lumière émise par un bloc (0 à 15)
+    public static int Emission(BlockType type) => infos[(int)type].emission;
+
+    // Hauteur de la surface sur laquelle un bloc qui tombe se pose, dans la case : 1 pour un cube,
+    // 0,5 pour une dalle... 0 = aucune collision (herbe, torche, feuilles) : il est traversé.
+    public static float SupportHeight(BlockType type)
+    {
+        Box[] boxes = infos[(int)type].collisionBoxes;
+        if (boxes == null) return 0f;
+
+        float top = 0f;
+        for (int i = 0; i < boxes.Length; i++) top = Mathf.Max(top, boxes[i].max.y);
+        return top;
     }
 
     // Charge un modèle exporté de Blockbench (Java Block/Item) depuis Assets/Resources/<resourcePath>.json
@@ -269,7 +352,25 @@ public static class BlockDatabase
     // ------------------------------------------------------------------
     // Constructeurs de BlockInfo
     // ------------------------------------------------------------------
+    // Quelles faces du modèle sont posées exactement contre le bord de la case ?
+    // (une dalle du bas : le bas et les 4 côtés, mais PAS le haut, qui est à mi-hauteur)
+    static byte FlushMask(Element[] elements)
+    {
+        const float e = 1e-4f;
+        int mask = 0;
 
+        foreach (Element el in elements)
+        {
+            if (el.max.y >= 1f - e) mask |= 1 << 0;   // haut
+            if (el.min.y <= e) mask |= 1 << 1;   // bas
+            if (el.max.z >= 1f - e) mask |= 1 << 2;   // +Z
+            if (el.min.z <= e) mask |= 1 << 3;   // -Z
+            if (el.max.x >= 1f - e) mask |= 1 << 4;   // +X
+            if (el.min.x <= e) mask |= 1 << 5;   // -X
+        }
+
+        return (byte)mask;
+    }
     static BlockInfo Solid(int top, int bottom, int side) => new BlockInfo
     {
         shape = BlockShape.Cube,
@@ -299,30 +400,46 @@ public static class BlockDatabase
         tileTop = tile,
         tileBottom = tile,
         tileSide = tile,
-        selectionBoxes = PlantBox
+        selectionBoxes = PlantBox,
+        isPlant = true
     };
 
     static BlockInfo Model(Element[] elements, bool collidable, bool cullSameType)
     {
         Box[] boxes = null;
+
+        boxes = new Box[elements.Length];
+        for (int i = 0; i < elements.Length; i++)
+            boxes[i] = new Box(elements[i].min, elements[i].max);
         if (collidable)
         {
-            boxes = new Box[elements.Length];
-            for (int i = 0; i < elements.Length; i++)
-                boxes[i] = new Box(elements[i].min, elements[i].max);
+            return new BlockInfo
+            {
+                shape = BlockShape.Model,
+                hasMesh = true,
+                opaque = false,
+                collidable = collidable,
+                cullSameType = cullSameType,
+                elements = elements,
+                collisionBoxes = boxes,
+                selectionBoxes = boxes,
+                flushMask = FlushMask(elements)
+            };
         }
-
-        return new BlockInfo
+        else
         {
-            shape = BlockShape.Model,
-            hasMesh = true,
-            opaque = false,
-            collidable = collidable,
-            cullSameType = cullSameType,
-            elements = elements,
-            collisionBoxes = boxes,
-            selectionBoxes = boxes
-        };
+            return new BlockInfo
+            {
+                shape = BlockShape.Model,
+                hasMesh = true,
+                opaque = false,
+                collidable = collidable,
+                cullSameType = cullSameType,
+                elements = elements,
+                collisionBoxes = null,
+                selectionBoxes = boxes
+            };
+        }
     }
 
     // ------------------------------------------------------------------

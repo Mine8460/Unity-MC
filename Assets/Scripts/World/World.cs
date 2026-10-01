@@ -3,7 +3,7 @@ using System.IO;
 using System.IO.Compression;
 using UnityEngine;
 
-public class World : MonoBehaviour
+public partial class World : MonoBehaviour
 {
     [Header("Références")]
     [SerializeField] Material chunkMaterial;
@@ -82,6 +82,8 @@ public class World : MonoBehaviour
     {
         if (player == null) return;
 
+        ProcessBlockUpdates();
+
         Vector2Int center = GetPlayerChunk();
         if (center != lastCenter)
         {
@@ -108,6 +110,7 @@ public class World : MonoBehaviour
     // Appelé aussi quand on quitte le mode Play dans l'éditeur
     void OnApplicationQuit()
     {
+        FlushBlockUpdates();
         if (saveToDisk) SaveAll();
     }
 
@@ -168,6 +171,7 @@ public class World : MonoBehaviour
             chunk.GenerateData(terrainHeight);
 
         chunks[coord] = chunk;
+        InitChunkLight(chunk);
     }
 
     bool HasAllNeighbors(Vector2Int c)
@@ -193,6 +197,7 @@ public class World : MonoBehaviour
 
         foreach (var key in toRemove)
         {
+            SettleFallingBlocksIn(key);
             Chunk chunk = chunks[key];
 
             // On garde les blocs modifiés avant de détruire le chunk
@@ -246,13 +251,19 @@ public class World : MonoBehaviour
 
         chunk.SetLocalBlock(lx, worldY, lz, type);
 
-        RebuildIfMeshed(cx, cz);
+        // Lumière : met à jour les torches et le ciel autour du bloc (marque les chunks dont la lumière change)
+        UpdateLightAt(worldX, worldY, worldZ);
 
-        // Bloc sur une bordure : les faces visibles du chunk voisin changent aussi
-        if (lx == 0) RebuildIfMeshed(cx - 1, cz);
-        if (lx == Chunk.SizeX - 1) RebuildIfMeshed(cx + 1, cz);
-        if (lz == 0) RebuildIfMeshed(cx, cz - 1);
-        if (lz == Chunk.SizeZ - 1) RebuildIfMeshed(cx, cz + 1);
+        // Chunks à reconstruire : celui du bloc, ses voisins si le bloc est sur une bordure,
+        // et ceux dont la lumière a changé. Chacun n'est reconstruit qu'une seule fois.
+        MarkDirty(cx, cz);
+        if (lx == 0)                MarkDirty(cx - 1, cz);
+        if (lx == Chunk.SizeX - 1)  MarkDirty(cx + 1, cz);
+        if (lz == 0)                MarkDirty(cx, cz - 1);
+        if (lz == Chunk.SizeZ - 1)  MarkDirty(cx, cz + 1);
+        FlushDirtyChunks();
+
+        QueueNeighborUpdates(worldX, worldY, worldZ);
 
         return true;
     }
@@ -366,27 +377,6 @@ public class World : MonoBehaviour
         saveDirty = false;
         if (File.Exists(SavePath)) File.Delete(SavePath);
         Debug.Log($"World : sauvegarde supprimée ({SavePath})");
-    }
-    public void BreakBlock(int worldX, int worldY, int worldZ)
-    {
-        if (worldY < 0 || worldY >= Chunk.SizeY)
-            return;
-        // FloorToInt gère correctement les coordonnées négatives
-        int cx = Mathf.FloorToInt(worldX / (float)Chunk.SizeX);
-        int cz = Mathf.FloorToInt(worldZ / (float)Chunk.SizeZ);
-
-        if (!chunks.TryGetValue(new Vector2Int(cx, cz), out Chunk chunk))
-            return; // hors du monde généré
-
-        int lx = worldX - cx * Chunk.SizeX;
-        int lz = worldZ - cz * Chunk.SizeZ;
-
-        BlockType type = chunk.GetLocalBlock(lx, worldY, lz);
-
-        if (type == BlockType.Bedrock || type == BlockType.Air)
-            return; // ne peut pas casser de bedrock ou d'air
-
-        SetBlock(worldX, worldY, worldZ, BlockType.Air);
     }
 
     public void PlaceBlock(int worldX, int worldY, int worldZ, BlockType type)
