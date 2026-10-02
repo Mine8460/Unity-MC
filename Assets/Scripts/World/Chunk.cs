@@ -6,7 +6,7 @@ using UnityEngine;
 public partial class Chunk : MonoBehaviour
 {
     public const int SizeX = 16;
-    public const int SizeY = 32;
+    public const int SizeY = 126;
     public const int SizeZ = 16;
 
     // Taille des données d'un chunk une fois sérialisé (1 octet par bloc)
