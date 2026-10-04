@@ -29,7 +29,7 @@ public class InventoryUI : MonoBehaviour
     SlotView heldView;
     Text tooltip;
     Font font;
-    Texture atlas;
+    [SerializeField] Texture atlas;
 
     void Start()
     {
@@ -76,8 +76,9 @@ public class InventoryUI : MonoBehaviour
 
     void BuildCanvas()
     {
+        // Le Canvas doit être à la RACINE de la scène. S'il est enfant d'un autre Canvas (celui de ton viseur,
+        // par exemple), il ne s'adapte plus à l'écran et la barre d'accès apparaît au milieu.
         var go = new GameObject("InventoryCanvas");
-        //go.transform.SetParent(transform, false);
 
         var canvas = go.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
@@ -306,8 +307,11 @@ public class InventoryUI : MonoBehaviour
     }
 }
 
-// Icône d'un bloc, dessinée en projection isométrique à partir de son VRAI mesh :
-// cubes, dalle, enclume, torche, plantes... tous ont une icône correcte, sans caméra ni texture à préparer.
+// Icône d'un bloc dans l'inventaire, choisie comme dans Minecraft :
+//   1. une image dessinée à la main, si elle existe : Assets/Resources/Icons/<NomDuBloc>.png (ex. Icons/Torch.png) ;
+//   2. sinon, pour une plante (forme en croix), sa texture à plat ;
+//   3. sinon, un rendu isométrique du VRAI mesh du bloc (cubes, dalle, enclume, modèles Blockbench...).
+// Aucun bloc n'a donc besoin d'icône pour être affiché : on en ajoute seulement quand on veut.
 public class BlockIcon : MaskableGraphic
 {
     sealed class IconQuad
@@ -319,11 +323,15 @@ public class BlockIcon : MaskableGraphic
 
     static readonly Dictionary<BlockType, IconQuad[]> cache = new();
 
+    // Icônes dessinées à la main, chargées une seule fois (null = pas d'image pour ce bloc)
+    static readonly Dictionary<BlockType, Texture2D> customIcons = new();
+
     World world;
     Texture atlas;
     BlockType type;
+    Texture2D customIcon;   // image du bloc affiché, ou null
 
-    public override Texture mainTexture => atlas;
+    public override Texture mainTexture => customIcon != null ? customIcon : atlas;
 
     public void Setup(World world, Texture atlas)
     {
@@ -337,7 +345,26 @@ public class BlockIcon : MaskableGraphic
     {
         if (type == newType) return;
         type = newType;
+
+        // Changer de texture (image <-> atlas) demande de refaire le matériau de l'icône
+        Texture2D icon = type == BlockType.Air ? null : CustomIcon(type);
+        if (icon != customIcon)
+        {
+            customIcon = icon;
+            SetMaterialDirty();
+        }
+
         SetVerticesDirty();
+    }
+
+    static Texture2D CustomIcon(BlockType t)
+    {
+        if (!customIcons.TryGetValue(t, out Texture2D tex))
+        {
+            tex = Resources.Load<Texture2D>("Icons/" + t);
+            customIcons[t] = tex;
+        }
+        return tex;
     }
 
     protected override void OnPopulateMesh(VertexHelper vh)
@@ -345,8 +372,27 @@ public class BlockIcon : MaskableGraphic
         vh.Clear();
         if (type == BlockType.Air || world == null) return;
 
-        IconQuad[] quads = GetQuads(type);
         Rect r = GetPixelAdjustedRect();
+
+        // 1) Image dessinée à la main
+        if (customIcon != null)
+        {
+            AddFlat(vh, r, Vector2.zero, new Vector2(0f, 1f), Vector2.one, new Vector2(1f, 0f));
+            return;
+        }
+
+        // 2) Plante : sa texture à plat (deux plans croisés vus en biais seraient illisibles)
+        BlockInfo info = BlockDatabase.Get(type);
+        if (info.shape == BlockShape.Cross)
+        {
+            int tile = info.tileSide;
+            AddFlat(vh, r, BlockDatabase.TileUV(tile, 0f, 0f), BlockDatabase.TileUV(tile, 0f, 1f),
+                           BlockDatabase.TileUV(tile, 1f, 1f), BlockDatabase.TileUV(tile, 1f, 0f));
+            return;
+        }
+
+        // 3) Rendu isométrique du mesh
+        IconQuad[] quads = GetQuads(type);
 
         foreach (IconQuad q in quads)
         {
@@ -365,6 +411,25 @@ public class BlockIcon : MaskableGraphic
             vh.AddTriangle(start, start + 1, start + 2);
             vh.AddTriangle(start, start + 2, start + 3);
         }
+    }
+
+    // Un carré qui remplit l'icône, avec les UV de ses 4 coins (bas-gauche, haut-gauche, haut-droite, bas-droite)
+    void AddFlat(VertexHelper vh, Rect r, Vector2 uv0, Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    {
+        Vector2[] corners = { new Vector2(r.xMin, r.yMin), new Vector2(r.xMin, r.yMax), new Vector2(r.xMax, r.yMax), new Vector2(r.xMax, r.yMin) };
+        Vector2[] uvs = { uv0, uv1, uv2, uv3 };
+
+        for (int k = 0; k < 4; k++)
+        {
+            UIVertex v = UIVertex.simpleVert;
+            v.position = new Vector3(corners[k].x, corners[k].y, 0f);
+            v.uv0 = uvs[k];
+            v.color = color;
+            vh.AddVert(v);
+        }
+
+        vh.AddTriangle(0, 1, 2);
+        vh.AddTriangle(0, 2, 3);
     }
 
     IconQuad[] GetQuads(BlockType t)

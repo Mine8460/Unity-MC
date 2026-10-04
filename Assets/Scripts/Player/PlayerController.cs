@@ -21,8 +21,39 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float gravity = 32f;
     [SerializeField] float maxFallSpeed = 50f;
     [SerializeField] float respawnBelowY = -30f;
+    [Tooltip("Au lancement, pose le joueur sur le sol (le terrain est généré : sa hauteur n'est pas connue à l'avance)")]
+    [SerializeField] bool spawnOnSurface = true;
     [Tooltip("Hauteur max montée sans sauter (0,5 = dalles ; Minecraft : 0,6)")]
     [SerializeField] float stepHeight = 0.6f;
+
+    [Header("Vol (pour explorer)")]
+    [Tooltip("Active / coupe le vol")]
+    [SerializeField] KeyCode flyToggleKey = KeyCode.F;
+    [Tooltip("Double-appui sur la touche de saut pour activer / couper le vol, comme Minecraft")]
+    [SerializeField] bool doubleTapJumpToFly = true;
+    [SerializeField] float flySpeed = 11f;
+    [Tooltip("Vitesse en maintenant la touche d'accélération")]
+    [SerializeField] float flyBoostSpeed = 30f;
+    [SerializeField] float flyVerticalSpeed = 8f;
+    [Tooltip("Plus haut = s'arrête et repart plus sèchement")]
+    [SerializeField] float flyAcceleration = 60f;
+    [Tooltip("En vol (saut = monter)")]
+    [SerializeField] KeyCode flyDownKey = KeyCode.LeftShift;
+    [SerializeField] KeyCode flyBoostKey = KeyCode.LeftControl;
+    [Tooltip("Mode fantôme : traverser les blocs en vol (touche ci-dessous pour basculer en jeu)")]
+    [SerializeField] bool noClip = false;
+    [SerializeField] KeyCode noClipKey = KeyCode.N;
+
+    [Header("Nage")]
+    [Tooltip("Vitesse horizontale dans l'eau, en fraction de la marche")]
+    [SerializeField, Range(0.1f, 1f)] float swimSpeedFactor = 0.6f;
+    [Tooltip("Dans l'eau, la gravité est réduite à cette fraction : on coule lentement")]
+    [SerializeField, Range(0f, 1f)] float waterGravityFactor = 0.25f;
+    [SerializeField] float swimSinkSpeed = 3f;
+    [Tooltip("Vitesse de remontée en maintenant la touche de saut")]
+    [SerializeField] float swimUpSpeed = 4.5f;
+    [Tooltip("Voile de couleur quand la tête est sous l'eau (alpha 0 = aucun)")]
+    [SerializeField] Color underwaterTint = new Color(0.1f, 0.25f, 0.6f, 0.45f);
 
     [Header("Souris")]
     [SerializeField] float mouseSensitivity = 2f;
@@ -51,6 +82,19 @@ public class PlayerController : MonoBehaviour
     float pitch;
     float jumpBuffer; // temps restant pendant lequel un appui sur saut est mémorisé
     bool wasOnGround; // au sol au début de la frame : autorise la montée automatique
+    bool spawned;     // le joueur a été posé sur le sol (une seule fois, quand son chunk est prêt)
+    bool flying;
+    bool inWater;         // le corps est dans l'eau (nage)
+    bool eyeInWater;      // la tête est sous la surface (voile bleu)
+    bool blockedSideways; // un mur a arrêté le déplacement horizontal pendant cette frame
+
+    // Doit être identique à LiquidSurface dans ChunkMesher : la surface de l'eau est à 14/16 du bloc
+    const float WaterSurface = 14f / 16f;
+    float lastJumpPress = -10f; // moment du dernier appui sur saut (double-appui = vol)
+
+    const float DoubleTapTime = 0.3f;
+
+    public bool IsFlying => flying;
 
     void Awake()
     {
@@ -81,14 +125,78 @@ public class PlayerController : MonoBehaviour
             pitch = Mathf.Clamp(pitch, -90f, 90f);
             cameraTransform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
 
-            if (Input.GetKeyDown(jumpKey)) jumpBuffer = JumpBufferTime;
+            if (Input.GetKeyDown(jumpKey))
+            {
+                jumpBuffer = JumpBufferTime;
+
+                // Double-appui sur saut : active / coupe le vol
+                if (doubleTapJumpToFly && Time.time - lastJumpPress < DoubleTapTime)
+                {
+                    SetFlying(!flying);
+                    lastJumpPress = -10f;
+                    jumpBuffer = 0f;
+                }
+                else
+                {
+                    lastJumpPress = Time.time;
+                }
+            }
+
+            if (Input.GetKeyDown(flyToggleKey)) SetFlying(!flying);
+            if (flying && Input.GetKeyDown(noClipKey)) noClip = !noClip;
         }
 
         Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
+        eyeInWater = IsEyeUnderwater();
+    }
+
+    // Pose le joueur sur le plus haut bloc solide sous sa hitbox (les 4 coins : il ne doit chevaucher aucun bloc).
+    // Retourne false si l'un des coins est sur un chunk pas encore chargé : on réessaiera à la frame suivante.
+    bool TryPlaceOnSurface()
+    {
+        Vector3 p = transform.position;
+
+        if (spawnOnSurface)
+        {
+            float half = width * 0.5f;
+            float ground = 0f;
+
+            for (int i = 0; i < 4; i++)
+            {
+                int cx = Mathf.FloorToInt(p.x + ((i & 1) == 0 ? -half : half));
+                int cz = Mathf.FloorToInt(p.z + ((i & 2) == 0 ? -half : half));
+                if (!world.IsLoaded(cx, cz)) return false;
+                ground = Mathf.Max(ground, world.GetSurfaceY(cx, cz));
+            }
+
+            p.y = ground + 0.01f;
+            transform.position = p;
+            velocity = Vector3.zero;
+        }
+
+        spawnPoint = p; // on réapparaît ici si on tombe hors du monde
+        return true;
     }
 
     void Simulate(float dt, bool active)
     {
+        // Le chunk sous le joueur n'est pas encore chargé (le monde se génère en arrière-plan) :
+        // on attend, sinon il tomberait dans le vide.
+        if (!world.IsLoaded(Mathf.FloorToInt(transform.position.x), Mathf.FloorToInt(transform.position.z))) return;
+
+        // Première fois que le sol est prêt : on y pose le joueur
+        if (!spawned)
+        {
+            if (!TryPlaceOnSurface()) return; // une partie de la hitbox est sur un chunk pas encore chargé
+            spawned = true;
+        }
+
+        if (flying)
+        {
+            SimulateFlight(dt, active);
+            return;
+        }
+
         // --- Vitesse voulue ---
         Vector3 input = Vector3.zero;
         if (active)
@@ -100,8 +208,11 @@ public class PlayerController : MonoBehaviour
             input = Vector3.ClampMagnitude(input, 1f);
         }
 
+        inWater = IsInWater(transform.position);
+
         Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * input;
         float speed = Input.GetKey(sprintKey) ? sprintSpeed : walkSpeed;
+        if (inWater) speed *= swimSpeedFactor;
         velocity.x = dir.x * speed;
         velocity.z = dir.z * speed;
 
@@ -114,20 +225,39 @@ public class PlayerController : MonoBehaviour
         bool wantsJump = active && (jumpBuffer > 0f || Input.GetKey(jumpKey));
         jumpBuffer = Mathf.Max(jumpBuffer - dt, 0f);
 
-        if (wantsJump && onGround)
+        bool swimUp = active && Input.GetKey(jumpKey);
+
+        if (inWater)
         {
-            velocity.y = Mathf.Sqrt(2f * gravity * jumpHeight);
+            // Nage : on coule lentement (l'eau amortit aussi les chutes) ; saut maintenu = on remonte
+            if (swimUp)
+                velocity.y = Mathf.MoveTowards(velocity.y, swimUpSpeed, gravity * 2f * dt);
+            else
+                velocity.y = Mathf.Max(velocity.y - gravity * waterGravityFactor * dt, -swimSinkSpeed);
             jumpBuffer = 0f;
         }
+        else
+        {
+            if (wantsJump && onGround)
+            {
+                velocity.y = Mathf.Sqrt(2f * gravity * jumpHeight);
+                jumpBuffer = 0f;
+            }
 
-        velocity.y = Mathf.Max(velocity.y - gravity * dt, -maxFallSpeed);
+            velocity.y = Mathf.Max(velocity.y - gravity * dt, -maxFallSpeed);
+        }
 
         // --- Déplacement axe par axe (Y, X, Z comme Minecraft) ---
         // Résoudre chaque axe séparément fait glisser le long des murs.
+        blockedSideways = false;
         MoveAxis(ref pos, 1, velocity.y * dt);
         MoveAxis(ref pos, 0, velocity.x * dt);
         MoveAxis(ref pos, 2, velocity.z * dt);
         transform.position = pos;
+
+        // Sortir de l'eau : en nageant vers le haut contre une berge, on se hisse dessus (comme Minecraft)
+        if (inWater && swimUp && blockedSideways)
+            velocity.y = Mathf.Max(velocity.y, Mathf.Sqrt(2f * gravity * jumpHeight));
 
         // Sécurité : tombé hors du monde
         if (pos.y < respawnBelowY)
@@ -135,6 +265,121 @@ public class PlayerController : MonoBehaviour
             transform.position = spawnPoint;
             velocity = Vector3.zero;
         }
+    }
+
+    // ------------------------------------------------------------------
+    // Vol
+    // ------------------------------------------------------------------
+
+    void SetFlying(bool on)
+    {
+        if (flying == on) return;
+        flying = on;
+        velocity = Vector3.zero;
+
+        // En sortant du mode fantôme à l'intérieur d'un bloc, on remonte jusqu'à une case libre
+        if (!on && Collide(transform.position, -1, 0f, out _))
+            EscapeUpwards();
+    }
+
+    void SimulateFlight(float dt, bool active)
+    {
+        Vector3 input = Vector3.zero;
+        float vertical = 0f;
+        bool boost = false;
+
+        if (active)
+        {
+            input = new Vector3(
+                (Input.GetKey(rightKey) ? 1f : 0f) - (Input.GetKey(leftKey) ? 1f : 0f),
+                0f,
+                (Input.GetKey(forwardKey) ? 1f : 0f) - (Input.GetKey(backKey) ? 1f : 0f));
+            input = Vector3.ClampMagnitude(input, 1f);
+            vertical = (Input.GetKey(jumpKey) ? 1f : 0f) - (Input.GetKey(flyDownKey) ? 1f : 0f);
+            boost = Input.GetKey(flyBoostKey);
+        }
+
+        // Vitesse voulue (le regard ne fait pas monter ou descendre : seules les touches le font, comme Minecraft)
+        Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * input;
+        float speed = boost ? flyBoostSpeed : flySpeed;
+        float vSpeed = flyVerticalSpeed * (boost ? 2f : 1f);
+        Vector3 target = new Vector3(dir.x * speed, vertical * vSpeed, dir.z * speed);
+
+        // Petite inertie : on rejoint la vitesse voulue progressivement
+        velocity = Vector3.MoveTowards(velocity, target, flyAcceleration * (boost ? 2f : 1f) * dt);
+
+        Vector3 pos = transform.position;
+
+        if (noClip)
+        {
+            pos += velocity * dt;
+        }
+        else
+        {
+            wasOnGround = false; // pas de montée automatique en vol
+            MoveAxis(ref pos, 1, velocity.y * dt);
+            MoveAxis(ref pos, 0, velocity.x * dt);
+            MoveAxis(ref pos, 2, velocity.z * dt);
+        }
+
+        // Ne pas sortir du monde par le haut ou par le bas
+        pos.y = Mathf.Clamp(pos.y, 1f, Chunk.SizeY + 32f);
+        transform.position = pos;
+
+        // Comme Minecraft : en descendant, toucher le sol arrête le vol
+        if (!noClip && vertical < 0f && Collide(pos + Vector3.down * GroundProbe, -1, 0f, out _))
+            SetFlying(false);
+    }
+
+    // Remonte case par case jusqu'à ce que la hitbox ne touche plus aucun bloc
+    void EscapeUpwards()
+    {
+        Vector3 p = transform.position;
+        for (int i = 0; i < Chunk.SizeY + 2 && Collide(p, -1, 0f, out _); i++)
+            p.y = Mathf.Floor(p.y) + 1f;
+        transform.position = p;
+    }
+
+    // ------------------------------------------------------------------
+    // Eau
+    // ------------------------------------------------------------------
+
+    bool IsLiquidAt(Vector3 p)
+    {
+        BlockType type = world.GetBlock(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
+        return BlockDatabase.GetRef(type).shape == BlockShape.Liquid;
+    }
+
+    // Le corps est dans l'eau : aux pieds ou à mi-hauteur
+    bool IsInWater(Vector3 feet)
+    {
+        return IsLiquidAt(feet + Vector3.up * 0.1f) || IsLiquidAt(feet + Vector3.up * (height * 0.5f));
+    }
+
+    // La tête est sous la surface (dans le bloc du dessus d'une étendue d'eau, la surface est à 14/16)
+    bool IsEyeUnderwater()
+    {
+        Vector3 eye = transform.position + Vector3.up;
+        if (!IsLiquidAt(eye)) return false;
+        if (IsLiquidAt(eye + Vector3.up)) return true;
+        return eye.y - Mathf.Floor(eye.y) < WaterSurface;
+    }
+
+    // Voile bleu sous l'eau, et petit rappel à l'écran quand on vole
+    void OnGUI()
+    {
+        if (eyeInWater && underwaterTint.a > 0f)
+        {
+            Color previous = GUI.color;
+            GUI.color = underwaterTint;
+            GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), Texture2D.whiteTexture);
+            GUI.color = previous;
+        }
+
+        if (!flying) return;
+        GUI.Label(new Rect(10f, 10f, 400f, 22f), noClip
+            ? "Vol (fantôme) — N : collisions, F : arrêter"
+            : "Vol — Espace / Shift : monter / descendre, Ctrl : vite, N : fantôme, F : arrêter");
     }
 
     void MoveAxis(ref Vector3 pos, int axis, float delta)
@@ -153,6 +398,7 @@ public class PlayerController : MonoBehaviour
             if (axis != 1 && wasOnGround && TryStepUp(ref pos)) continue;
 
             // Collision : on colle la hitbox contre la boîte rencontrée et on annule la vitesse sur cet axe
+            if (axis != 1) blockedSideways = true;
             pos[axis] = snap;
             velocity[axis] = 0f;
             break;

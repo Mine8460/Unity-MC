@@ -680,15 +680,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 07463a267a2040b44b2e7341f09b7115, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::World
+  fluidTickInterval: 0.25
+  maxFluidUpdatesPerTick: 4096
   playerInventory: {fileID: 981828843}
   logPlacementFailures: 1
   maxBlockUpdatesPerFrame: 256
   chunkMaterial: {fileID: 2100000, guid: eb2d557371650164da0ba75562715aa7, type: 2}
+  waterMaterial: {fileID: 2100000, guid: cc806ef781deaa74bbdd7d045f35f065, type: 2}
   player: {fileID: 981828837}
-  renderDistance: 6
-  maxDataPerFrame: 4
-  maxMeshPerFrame: 2
-  terrainHeight: 4
+  renderDistance: 24
+  workerThreads: 0
+  maxGenerationsInFlight: 6
+  maxMeshJobsInFlight: 6
+  integrateBudgetMs: 3
+  colliderRadius: 2
+  worldSeed: 12345
+  baseHeight: 64
+  seaLevel: 62
+  hillHeight: 10
+  mountainHeight: 80
+  featureScale: 1
+  caves: 1
+  caveDensity: 0.5
+  treeDensity: 0.5
+  showcaseBlocks: 1
   saveToDisk: 1
   saveFileName: world.save
   autosaveInterval: 60
@@ -701,7 +716,7 @@ Transform:
   m_GameObject: {fileID: 628363071}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 2.29798, y: 0, z: 6.59155}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -785,7 +800,7 @@ Transform:
   m_GameObject: {fileID: 981828836}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 10, y: 10, z: 10}
+  m_LocalPosition: {x: 10, y: 100, z: 10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -815,7 +830,23 @@ MonoBehaviour:
   gravity: 32
   maxFallSpeed: 50
   respawnBelowY: -30
+  spawnOnSurface: 1
   stepHeight: 0.6
+  flyToggleKey: 102
+  doubleTapJumpToFly: 1
+  flySpeed: 11
+  flyBoostSpeed: 30
+  flyVerticalSpeed: 8
+  flyAcceleration: 60
+  flyDownKey: 304
+  flyBoostKey: 306
+  noClip: 0
+  noClipKey: 110
+  swimSpeedFactor: 0.6
+  waterGravityFactor: 0.25
+  swimSinkSpeed: 3
+  swimUpSpeed: 4.5
+  underwaterTint: {r: 0.1, g: 0.25, b: 0.6, a: 0.45}
   mouseSensitivity: 2
   forwardKey: 122
   backKey: 115
@@ -950,7 +981,11 @@ MonoBehaviour:
   toggleKey: 101
   dropKey: 103
   giveTestItems: 1
-  startItems: []
+  startItems:
+  - type: 16
+    count: 64
+  - type: 12
+    count: 64
   saveToDisk: 1
   saveFileName: inventory.json
 --- !u!1 &1255864322
@@ -1099,6 +1134,7 @@ MonoBehaviour:
   world: {fileID: 628363072}
   slotSize: 48
   gap: 4
+  atlas: {fileID: 0}
 --- !u!1 &1294280166
 GameObject:
   m_ObjectHideFlags: 0

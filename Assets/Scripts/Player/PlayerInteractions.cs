@@ -18,37 +18,20 @@ public class PlayerInteractions : MonoBehaviour
 
     void Update()
     {
-        BlockType type = GetBlockTypeInsideCamera();
-        if (type == BlockType.Air)
-        {
-            if (Physics.Raycast(camera.position, camera.forward, out RaycastHit hit, interactionRange))
-                outline.ShowFromHit(hit.point, hit.normal);
-            else
-                outline.Hide();
-        }
+        if (Physics.Raycast(camera.position, camera.forward, out RaycastHit hit, interactionRange))
+            outline.ShowFromHit(hit.point, hit.normal);
         else
-        {
-            outline.Show(new(Mathf.FloorToInt(camera.position.x), Mathf.FloorToInt(camera.position.y), Mathf.FloorToInt(camera.position.z)));
-        }
+            outline.Hide();
     }
 
     public void OnBreak(InputAction.CallbackContext context)
     {
         if (context.performed && !Inventory.IsOpen)
         {
-            BlockType type = GetBlockTypeInsideCamera();
-            if (type == BlockType.Air)
+            RaycastHit hit;
+            if (Physics.Raycast(camera.position, camera.forward, out hit, interactionRange))
             {
-                RaycastHit hit;
-                if (Physics.Raycast(camera.position, camera.forward, out hit, interactionRange))
-                {
-                    Vector3 point = hit.point - hit.normal * 0.02f; // Move the point slightly inside the block
-                    GetComponent<PlayerController>().world.BreakBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z));
-                }
-            }
-            else
-            {
-                Vector3 point = camera.position;
+                Vector3 point = hit.point - hit.normal * 0.02f; // Move the point slightly inside the block
                 GetComponent<PlayerController>().world.BreakBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z));
             }
         }

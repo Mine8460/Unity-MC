@@ -20,8 +20,8 @@ public partial class Chunk
             case BlockShape.Cross:
             {
                 const float h = 0.318f;
-                AddPlane(verts, normals, uvs, tris, new Vector3(0.5f - h, 0f, 0.5f - h), new Vector3(0.5f + h, 0f, 0.5f + h), info.tileSide);
-                AddPlane(verts, normals, uvs, tris, new Vector3(0.5f + h, 0f, 0.5f - h), new Vector3(0.5f - h, 0f, 0.5f + h), info.tileSide);
+                ChunkMesher.AddPlane(verts, normals, uvs, tris, new Vector3(0.5f - h, 0f, 0.5f - h), new Vector3(0.5f + h, 0f, 0.5f + h), info.tileSide);
+                ChunkMesher.AddPlane(verts, normals, uvs, tris, new Vector3(0.5f + h, 0f, 0.5f - h), new Vector3(0.5f - h, 0f, 0.5f + h), info.tileSide);
                 break;
             }
 
@@ -31,7 +31,7 @@ public partial class Chunk
                     foreach (Element el in info.elements)
                         for (int f = 0; f < 6; f++)
                             if (el.tiles[f] >= 0)
-                                AddBoxFace(verts, tris, normals, uvs, Vector3.zero, el.min, el.max, f, el.tiles[f]);
+                                ChunkMesher.AddBoxFace(verts, tris, normals, uvs, Vector3.zero, el.min, el.max, f, el.tiles[f]);
                 }
 
                 if (info.quads != null)
@@ -51,7 +51,7 @@ public partial class Chunk
 
             default: // Cube
                 for (int f = 0; f < 6; f++)
-                    AddBoxFace(verts, tris, normals, uvs, Vector3.zero, Vector3.zero, Vector3.one, f, BlockDatabase.GetTile(type, f));
+                    ChunkMesher.AddBoxFace(verts, tris, normals, uvs, Vector3.zero, Vector3.zero, Vector3.one, f, BlockDatabase.GetTile(type, f));
                 break;
         }
 
@@ -60,10 +60,19 @@ public partial class Chunk
         mesh.SetTriangles(tris, 0);
         mesh.SetNormals(normals);
         mesh.SetUVs(0, uvs);
+        // Pleine lumière du ciel, aucune lumière de torche : le bloc en chute n'a pas de case où lire sa lumière.
+        // (alpha 0 = éclairage normal, jamais en "plein éclat")
         var colors = new Color32[verts.Count];
         for (int i = 0; i < colors.Length; i++) colors[i] = new Color32(0, 255, 255, 0);
         mesh.colors32 = colors;
         mesh.RecalculateBounds();
         return mesh;
+    }
+
+    // Décalage d'une plante en croix à une position MONDE (utilisé par le contour du bloc visé).
+    // Garde la MÊME amplitude que PlantOffset.
+    public static Vector3 PlantOffsetAt(int worldX, int worldZ)
+    {
+        return ChunkMesher.PlantOffsetAt(worldX, worldZ);
     }
 }

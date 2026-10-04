@@ -22,6 +22,7 @@ public enum BlockType : byte
     Sand,
     StoneSlabTop,
     StoneDoubleSlab,
+    Water
 }
 
 public enum BlockShape : byte
@@ -29,6 +30,7 @@ public enum BlockShape : byte
     Cube,   // cube plein (feuilles et vitre en font partie)
     Cross,  // deux plans en X, double face (herbes hautes, fleurs...)
     Model,  // assemblage de cuboïdes (dalle, enclume, torche...)
+    Liquid,
 }
 
 // Boîte alignée sur les axes, en coordonnées de bloc (0..1)
@@ -117,6 +119,7 @@ public static class BlockDatabase
 {
     // Atlas carré de N x N tuiles (ici 4x4 = 16 tuiles)
     public const int AtlasTilesPerRow = 8;
+    public const int WaterTile = 13;
 
     // Résolution d'UNE tuile en pixels (doit correspondre à "Pixels par bloc" du shader)
     public const int TilePixels = 16;
@@ -138,11 +141,17 @@ public static class BlockDatabase
 
     // Noms de tuiles : sert à retrouver la bonne tuile d'après le nom de la texture d'un modèle Blockbench
     // ("block/anvil" -> "anvil"). Une texture inconnue utilise la tuile par défaut donnée à FromBlockbench.
+    static readonly bool[] hasMeshTable = new bool[256];
+    static readonly bool[] opaqueTable = new bool[256];
+    static readonly byte[] lightOpacityTable = new byte[256];
+    static readonly byte[] emissionTable = new byte[256];
+
     static readonly Dictionary<string, int> tileNames = new()
     {
-        { "grass_top", 0 }, { "grass_side", 1 }, { "dirt", 2 },       { "stone", 3 },
-        { "log_side", 4 },  { "log_top", 5 },    { "leaves", 6 },     { "glass", 7 },
-        { "tall_grass", 8 },{ "anvil_top", 9 },  { "anvil", 10 },     { "torch", 11 },
+        { "grass_top", 0 }, { "grass_side", 1 },    { "dirt", 2 },          { "stone", 3 },
+        { "bedrock", 4 },   { "leaves", 5 },        { "log_side", 6 },      { "log_top", 7 },
+        { "glass", 8 },     { "tall_grass", 9 },    { "anvil", 10 },        { "torch", 11 }, 
+        { "sand", 12 },     { "water", 13 },
     };
 
     public static int TileByName(string name)
@@ -172,6 +181,21 @@ public static class BlockDatabase
             tileTop = 5,
             tileBottom = 5,
             tileSide = 5
+        };
+
+        infos[(int)BlockType.Water] = new BlockInfo
+        {
+            shape = BlockShape.Liquid,
+            hasMesh = true,
+            opaque = false,
+            collidable = false,
+            replaceable = true,
+            dropsNothing = true,
+            lightFilter = 1,
+            collisionBoxes = null,
+            tileTop = WaterTile,
+            tileBottom = WaterTile,
+            tileSide = WaterTile
         };
 
         // Vitre : transparente mais avec collision, et sans faces internes
@@ -243,6 +267,15 @@ public static class BlockDatabase
         infos[(int)BlockType.StoneSlabTop].dropOverride = BlockType.StoneSlab;
         infos[(int)BlockType.StoneDoubleSlab].dropOverride = BlockType.StoneSlab;
         infos[(int)BlockType.StoneDoubleSlab].dropCount = 2;
+
+        // Remplit les tables de lecture rapide (APRÈS toutes les règles ci-dessus)
+        for (int i = 0; i < infos.Length; i++)
+        {
+            hasMeshTable[i] = infos[i].hasMesh;
+            opaqueTable[i] = infos[i].opaque;
+            lightOpacityTable[i] = (byte)(infos[i].opaque ? 15 : infos[i].lightFilter);
+            emissionTable[i] = infos[i].emission;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -447,6 +480,13 @@ public static class BlockDatabase
     // ------------------------------------------------------------------
 
     public static BlockInfo Get(BlockType type) => infos[(int)type];
+
+    // Comme Get, mais SANS copier la structure (à privilégier dans les boucles chaudes)
+    public static ref readonly BlockInfo GetRef(BlockType type) => ref infos[(int)type];
+
+    // Lectures ultra-rapides : un simple accès à un tableau
+    public static bool HasMesh(BlockType type) => hasMeshTable[(int)type];
+    public static bool IsOpaque(BlockType type) => opaqueTable[(int)type];
 
     // face : 0 = haut, 1 = bas, 2..5 = côtés (cubes uniquement)
     public static int GetTile(BlockType type, int face)
