@@ -20,11 +20,25 @@ public partial class World
         // Sans ça, une herbe devant le sol détournerait la pose.
         bool replaceHit = BlockDatabase.Get(GetBlock(hitBlock.x, hitBlock.y, hitBlock.z)).replaceable;
 
+        if (item == BlockType.Torch && ! replaceHit)
+        {
+            if (normal.y < 0) return false;
+            if (normal.y == 0) item = WallTorchFor(normal);
+        }
+
         if (IsSlabItem(item, out BlockType top, out BlockType full))
             return TryPlaceSlab(hitBlock, normal, hitPoint, replaceHit, item, top, full);
 
         Vector3Int p = replaceHit ? hitBlock : hitBlock + normal;
         return PlaceAt(p, item, hitBlock, normal, hitPoint);
+    }
+
+    static BlockType WallTorchFor(Vector3Int normal)
+    {
+        if (normal.z < 0) return BlockType.WallTorchNorth;
+        if (normal.z > 0) return BlockType.WallTorchSouth;
+        if (normal.x < 0) return BlockType.WallTorchEast;
+        return BlockType.WallTorchWest;
     }
 
     // Les objets qui se posent en dalle : l'objet est la dalle du BAS, avec ses deux variantes

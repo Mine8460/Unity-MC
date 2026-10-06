@@ -42,10 +42,12 @@ public partial class World
     bool HasSupport(int x, int y, int z, BlockInfo info)
     {
         BlockInfo below = BlockDatabase.Get(GetBlock(x, y - 1, z));
+        BlockInfo behind = BlockDatabase.Get(GetBlock(x + info.attachDir.x, y + info.attachDir.y, z + info.attachDir.z));
 
         switch (info.support)
         {
             case SupportRule.SolidBelow: return below.shape == BlockShape.Cube && below.collidable;
+            case SupportRule.SolidBehind: return behind.shape == BlockShape.Cube && behind.collidable;
             case SupportRule.SoilBelow:  return below.isSoil;
             default:                     return true;
         }

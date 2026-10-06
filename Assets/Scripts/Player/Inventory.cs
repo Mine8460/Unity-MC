@@ -34,6 +34,9 @@ public class Inventory : MonoBehaviour
 
     readonly ItemStack[] slots = new ItemStack[Size];
     ItemStack held;     // la pile tenue par la souris (écran d'inventaire)
+
+    // Grille d'artisanat : 2 x 2 dans l'inventaire, 3 x 3 à l'établi (rangée par rangée, de haut en bas)
+    readonly ItemStack[] craftGrid = new ItemStack[9];
     int selected;
     bool dirty;
     float saveTimer;
@@ -44,6 +47,11 @@ public class Inventory : MonoBehaviour
     public int Selected => selected;
     public ItemStack HeldStack => held;
     public ItemStack GetSlot(int index) => slots[index];
+
+    // Artisanat : taille de la grille (2 = inventaire, 3 = établi), ses cases, et l'objet qu'elle fabrique
+    public int CraftingSize { get; private set; } = 2;
+    public ItemStack GetCraftSlot(int index) => craftGrid[index];
+    public ItemStack CraftResult => Crafting.Match(craftGrid, CraftingSize);
 
     // ------------------------------------------------------------------
     // Cycle de vie
@@ -62,7 +70,7 @@ public class Inventory : MonoBehaviour
     static T FindFirst<T>() where T : UnityEngine.Object
     {
 #if UNITY_2023_1_OR_NEWER
-        return UnityEngine.Object.FindAnyObjectByType<T>();
+        return UnityEngine.Object.FindFirstObjectByType<T>();
 #else
         return UnityEngine.Object.FindObjectOfType<T>();
 #endif
@@ -78,33 +86,40 @@ public class Inventory : MonoBehaviour
             return;
         }
 
-        // Outils, en attendant l'artisanat
-        Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.DiamondAxe, 1);
-        Add(ItemType.DiamondShovel, 1);
-
         Add(BlockType.Stone, 64);
         Add(BlockType.Dirt, 64);
-        Add(BlockType.Log, 64);
-        Add(BlockType.Glass, 64);
-        Add(BlockType.Torch, 64);
-        Add(BlockType.StoneSlab, 64);
-        Add(BlockType.Anvil, 64);
-        Add(BlockType.Sand, 64);
-        Add(BlockType.Water, 64);
-        Add(BlockType.Leaves, 64);
-        Add(BlockType.TallGrass, 64);
+        Add(BlockType.Log, 32);
+        Add(BlockType.Glass, 32);
+        Add(BlockType.Torch, 32);
+        Add(BlockType.StoneSlab, 32);
+        Add(BlockType.Anvil, 8);
+        Add(BlockType.Sand, 16);
 
+        // Outils, en attendant l'artisanat
         Add(ItemType.WoodenPickaxe, 1);
         Add(ItemType.StonePickaxe, 1);
         Add(ItemType.IronPickaxe, 1);
-        Add(ItemType.GoldenAxe, 1);
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.IronAxe, 1);
+        Add(ItemType.IronShovel, 1);
+        Add(ItemType.Stick, 16);
 
+        // Outils pour tester (en attendant l'artisanat)
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.StoneAxe, 1);
+        Add(ItemType.StoneShovel, 1);
     }
 
     void Update()
     {
-        if (Input.GetKeyDown(toggleKey)) SetOpen(!IsOpen);
+        if (Input.GetKeyDown(toggleKey))
+        {
+            if (!IsOpen) CraftingSize = 2; // E : l'inventaire, avec la grille 2 x 2
+            SetOpen(!IsOpen);
+        }
         else if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
 
         // Sauvegarde automatique toutes les 30 secondes s'il y a eu un changement
@@ -134,6 +149,7 @@ public class Inventory : MonoBehaviour
     void OnApplicationQuit()
     {
         ReturnHeldStack();
+        ReturnCraftGrid();
         Save();
     }
 
@@ -249,6 +265,7 @@ public class Inventory : MonoBehaviour
         else
         {
             ReturnHeldStack();
+            ReturnCraftGrid();
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             Save();
@@ -260,18 +277,34 @@ public class Inventory : MonoBehaviour
     // Clic sur une case de l'écran d'inventaire (gauche ou droit)
     public void ClickSlot(int i, bool right)
     {
-        ItemStack slot = slots[i];
+        ClickStack(ref slots[i], right);
+        Touch();
+    }
+
+    // Clic sur une case de la grille d'artisanat : comme une case d'inventaire
+    public void ClickCraftSlot(int i, bool right)
+    {
+        if (i < 0 || i >= CraftingSize * CraftingSize) return;
+        ClickStack(ref craftGrid[i], right);
+        Touch();
+    }
+
+    // Échange entre une case et la pile tenue par la souris, comme Minecraft :
+    // clic gauche = prendre / poser / fusionner / échanger ; clic droit = prendre la moitié / poser un seul objet
+    void ClickStack(ref ItemStack target, bool right)
+    {
+        ItemStack slot = target;
 
         if (!right)
         {
             if (held.IsEmpty)
             {
                 held = slot;
-                slots[i] = default;
+                target = default;
             }
             else if (slot.IsEmpty)
             {
-                slots[i] = held;
+                target = held;
                 held = default;
             }
             else if (slot.CanStackWith(held))
@@ -280,12 +313,12 @@ public class Inventory : MonoBehaviour
                 int moved = Mathf.Max(0, Mathf.Min(held.count, ItemDatabase.MaxStack(slot.type) - slot.count));
                 slot.count += moved;
                 held.count -= moved;
-                slots[i] = slot;
+                target = slot;
                 if (held.count <= 0) held = default;
             }
             else
             {
-                slots[i] = held;
+                target = held;
                 held = slot;
             }
         }
@@ -299,30 +332,88 @@ public class Inventory : MonoBehaviour
                     int take = (slot.count + 1) / 2;
                     held = new ItemStack(slot.type, take, slot.damage);
                     slot.count -= take;
-                    slots[i] = slot.count > 0 ? slot : default;
+                    target = slot.count > 0 ? slot : default;
                 }
             }
             else if (slot.IsEmpty)
             {
-                slots[i] = new ItemStack(held.type, 1, held.damage);
+                target = new ItemStack(held.type, 1, held.damage);
                 held.count--;
                 if (held.count <= 0) held = default;
             }
             else if (slot.CanStackWith(held) && slot.count < ItemDatabase.MaxStack(slot.type))
             {
                 slot.count++;
-                slots[i] = slot;
+                target = slot;
                 held.count--;
                 if (held.count <= 0) held = default;
             }
             else
             {
-                slots[i] = held;
+                target = held;
                 held = slot;
             }
         }
+    }
+
+    // Clic sur la case de résultat : prend UN exemplaire fabriqué (dans la main), ou, avec Maj,
+    // en fabrique autant que possible directement dans l'inventaire
+    public void ClickResult(bool all)
+    {
+        ItemStack result = CraftResult;
+        if (result.IsEmpty) return;
+
+        if (all)
+        {
+            for (int guard = 0; guard < 64; guard++)
+            {
+                result = CraftResult;
+                if (result.IsEmpty || !CanAccept(result)) break;
+                Add(result);
+                ConsumeCraftIngredients();
+            }
+        }
+        else
+        {
+            if (held.IsEmpty) held = result;
+            else if (held.CanStackWith(result) && held.count + result.count <= ItemDatabase.MaxStack(held.type)) held.count += result.count;
+            else return; // la main tient autre chose
+            ConsumeCraftIngredients();
+        }
 
         Touch();
+    }
+
+    // Une fabrication consomme un objet de chaque case occupée de la grille
+    void ConsumeCraftIngredients()
+    {
+        int n = CraftingSize * CraftingSize;
+        for (int i = 0; i < n; i++)
+        {
+            if (craftGrid[i].IsEmpty) continue;
+            craftGrid[i].count--;
+            if (craftGrid[i].count <= 0) craftGrid[i] = default;
+        }
+    }
+
+    // Ouvre l'inventaire avec la grille 3 x 3 de l'établi
+    public void OpenCraftingTable()
+    {
+        if (IsOpen) return;
+        CraftingSize = 3;
+        SetOpen(true);
+    }
+
+    // À la fermeture : ce qui reste dans la grille retourne dans l'inventaire (ou est lâché si c'est plein)
+    void ReturnCraftGrid()
+    {
+        for (int i = 0; i < craftGrid.Length; i++)
+        {
+            if (craftGrid[i].IsEmpty) continue;
+            int left = Add(craftGrid[i]);
+            if (left > 0) DropFromPlayer(new ItemStack(craftGrid[i].type, left, craftGrid[i].damage));
+            craftGrid[i] = default;
+        }
     }
 
     // Lâche la pile tenue par la souris (clic en dehors du panneau) : tout, ou un seul objet

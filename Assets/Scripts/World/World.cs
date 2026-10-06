@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using Unity.Mathematics;
 using UnityEngine;
 using Debug = UnityEngine.Debug;
 
@@ -144,10 +143,7 @@ public partial class World : MonoBehaviour
         }
         offsets.Sort((a, b) => (a.x * a.x + a.y * a.y).CompareTo(b.x * b.x + b.y * b.y));
 
-        if (saveToDisk)
-            LoadFromDisk();
-        else
-            worldSeed = UnityEngine.Random.Range(0, 999999);
+        if (saveToDisk) LoadFromDisk();
     }
 
     void OnEnable()

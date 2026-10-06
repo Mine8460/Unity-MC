@@ -2,6 +2,8 @@ using System;
 using System.Collections.Concurrent;
 using System.Threading;
 using UnityEngine;
+// UnityEngine a aussi un ThreadPriority (priorité de chargement des assets) : on veut celui des threads .NET
+using ThreadPriority = System.Threading.ThreadPriority;
 
 // Quelques threads secondaires qui exécutent les tâches lourdes (génération du terrain, lumière, maillage)
 // pour que le thread principal ne gèle jamais. Les tâches sont des fonctions simples (Action) : elles ne
@@ -27,7 +29,7 @@ public sealed class ChunkWorkers : IDisposable
                 IsBackground = true,
                 Name = "Chunk worker " + i,
                 // Un peu moins prioritaires que le jeu lui-même : le rendu passe avant la génération
-                Priority = System.Threading.ThreadPriority.BelowNormal,
+                Priority = ThreadPriority.BelowNormal,
             };
             threads[i].Start();
         }

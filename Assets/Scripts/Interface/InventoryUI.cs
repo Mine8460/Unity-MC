@@ -27,6 +27,9 @@ public class InventoryUI : MonoBehaviour
 
     readonly SlotView[] hudSlots = new SlotView[Inventory.HotbarSize];
     readonly SlotView[] panelSlots = new SlotView[Inventory.Size];
+    readonly SlotView[] craftSlots = new SlotView[9];   // grille d'artisanat affichée en 3 x 3 (2 x 2 utilisées dans l'inventaire)
+    SlotView resultView;
+    Text craftTitle;
 
     RectTransform canvasRect, hud, panel;
     Canvas canvas;
@@ -111,32 +114,57 @@ public class InventoryUI : MonoBehaviour
     void BuildPanel()
     {
         const float pad = 16f, separation = 14f;
+        float craftHeight = 3 * slotSize + 2 * gap + separation; // zone d'artisanat, au-dessus de l'inventaire
 
         panel = NewRect("Inventory", canvasRect);
         panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(0.5f, 0.5f);
         panel.sizeDelta = new Vector2(
             9 * slotSize + 8 * gap + 2 * pad,
-            4 * slotSize + 3 * gap + separation + 2 * pad);
+            4 * slotSize + 3 * gap + separation + craftHeight + 2 * pad);
         panel.anchoredPosition = Vector2.zero;
 
         var background = panel.gameObject.AddComponent<Image>();
         background.color = new Color(0.05f, 0.05f, 0.05f, 0.9f);
         background.raycastTarget = false;
 
+        // Artisanat : titre, grille (colonnes 2 à 4), flèche (colonne 5), résultat (colonne 6)
+        craftTitle = CreateLabel(panel, new Vector2(pad, -pad), new Vector2(slotSize + gap, slotSize), 15, TextAnchor.UpperLeft);
+        for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+            craftSlots[row * 3 + col] = CreateSlot(panel, new Vector2(pad + (col + 1) * (slotSize + gap), -(pad + row * (slotSize + gap))));
+        CreateLabel(panel, new Vector2(pad + 4 * (slotSize + gap), -(pad + (slotSize + gap))), new Vector2(slotSize, slotSize), 30, TextAnchor.MiddleCenter).text = "→";
+        resultView = CreateSlot(panel, new Vector2(pad + 5 * (slotSize + gap) + gap, -(pad + (slotSize + gap))));
+
         // 3 rangées d'inventaire (cases 9 à 35)
         for (int row = 0; row < 3; row++)
         for (int col = 0; col < 9; col++)
         {
-            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + row * (slotSize + gap)));
+            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + row * (slotSize + gap)));
             panelSlots[9 + row * 9 + col] = CreateSlot(panel, pos);
         }
 
         // la barre d'accès, en bas (cases 0 à 8)
         for (int col = 0; col < 9; col++)
         {
-            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + 3 * (slotSize + gap) + separation));
+            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + 3 * (slotSize + gap) + separation));
             panelSlots[col] = CreateSlot(panel, pos);
         }
+    }
+
+    Text CreateLabel(Transform parent, Vector2 anchoredPos, Vector2 size, int fontSize, TextAnchor alignment)
+    {
+        var rect = NewRect("Label", parent);
+        rect.anchorMin = rect.anchorMax = rect.pivot = new Vector2(0f, 1f);
+        rect.sizeDelta = size;
+        rect.anchoredPosition = anchoredPos;
+        var text = rect.gameObject.AddComponent<Text>();
+        text.font = font;
+        text.fontSize = fontSize;
+        text.color = new Color(0.85f, 0.85f, 0.85f);
+        text.alignment = alignment;
+        text.horizontalOverflow = HorizontalWrapMode.Overflow;
+        text.raycastTarget = false;
+        return text;
     }
 
     void BuildHeldAndTooltip()
@@ -282,6 +310,19 @@ public class InventoryUI : MonoBehaviour
         for (int i = 0; i < Inventory.Size; i++)
             Fill(panelSlots[i], inventory.GetSlot(i), i < Inventory.HotbarSize && i == inventory.Selected);
 
+        // Artisanat : 2 x 2 dans l'inventaire, 3 x 3 à l'établi
+        int size = inventory.CraftingSize;
+        craftTitle.text = size == 3 ? "Établi" : "Artisanat";
+        for (int row = 0; row < 3; row++)
+        for (int col = 0; col < 3; col++)
+        {
+            SlotView view = craftSlots[row * 3 + col];
+            bool used = row < size && col < size;
+            view.rect.gameObject.SetActive(used);
+            if (used) Fill(view, inventory.GetCraftSlot(row * size + col), false);
+        }
+        Fill(resultView, inventory.CraftResult, false);
+
         Fill(heldView, inventory.HeldStack, false);
         heldView.rect.gameObject.SetActive(open && !inventory.HeldStack.IsEmpty);
     }
@@ -341,19 +382,39 @@ public class InventoryUI : MonoBehaviour
             }
         }
 
+        // Case d'artisanat ou résultat sous la souris
+        int size = inventory.CraftingSize;
+        int hoveredCraft = -1;
+        for (int row = 0; row < size && hoveredCraft < 0; row++)
+        for (int col = 0; col < size; col++)
+        {
+            if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[row * 3 + col].rect, mouse, null))
+            {
+                hoveredCraft = row * size + col;
+                break;
+            }
+        }
+        bool hoveredResult = RectTransformUtility.RectangleContainsScreenPoint(resultView.rect, mouse, null);
+
         bool left = Input.GetMouseButtonDown(0);
         bool right = Input.GetMouseButtonDown(1);
 
         if (left || right)
         {
-            if (hovered >= 0)
+            if (hoveredResult)
+                inventory.ClickResult(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)); // Maj : tout fabriquer
+            else if (hoveredCraft >= 0)
+                inventory.ClickCraftSlot(hoveredCraft, right);
+            else if (hovered >= 0)
                 inventory.ClickSlot(hovered, right);
             else if (!RectTransformUtility.RectangleContainsScreenPoint(panel, mouse, null))
                 inventory.DropHeld(right); // clic en dehors du panneau : lâche la pile (un seul objet au clic droit)
         }
 
         // Info-bulle : le nom de l'objet sous la souris
-        ItemStack hoveredStack = hovered >= 0 ? inventory.GetSlot(hovered) : default;
+        ItemStack hoveredStack = hovered >= 0 ? inventory.GetSlot(hovered)
+                               : hoveredCraft >= 0 ? inventory.GetCraftSlot(hoveredCraft)
+                               : hoveredResult ? inventory.CraftResult : default;
         bool showTooltip = !hoveredStack.IsEmpty && inventory.HeldStack.IsEmpty;
         tooltip.gameObject.SetActive(showTooltip);
         if (showTooltip)
