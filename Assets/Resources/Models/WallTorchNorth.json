@@ -5,7 +5,8 @@
 		{
 			"from": [7, 4, -2],
 			"to": [9, 14, 0],
-			"rotation": {"angle": 20, "axis": "x", "origin": [7, 4, -2]},
+			"rotation": {"angle": 20, "axis": "x", "origin": [7, 4, 0]},
+			"color": 4,
 			"faces": {
 				"north": {"uv": [7, 6, 9, 16], "texture": "#missing"},
 				"east": {"uv": [7, 6, 9, 16], "texture": "#missing"},

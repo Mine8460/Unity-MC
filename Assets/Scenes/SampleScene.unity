@@ -870,8 +870,8 @@ MonoBehaviour:
   respawnBelowY: -30
   spawnOnSurface: 1
   stepHeight: 0.6
-  flyToggleKey: 102
-  doubleTapJumpToFly: 1
+  flyToggleKey: 0
+  doubleTapJumpToFly: 0
   flySpeed: 11
   flyBoostSpeed: 30
   flyVerticalSpeed: 8
