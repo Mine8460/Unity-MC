@@ -271,6 +271,7 @@ public static class TerrainGenerator
         new OreSpec(BlockType.IronOre,    10,  8, 5,  70),
         new OreSpec(BlockType.GoldOre,     3,  7, 5,  32),
         new OreSpec(BlockType.DiamondOre,  1,  6, 5,  16),
+        new OreSpec(BlockType.RedstoneOre, 8,  7, 5,  16),
     };
 
     static readonly int[] StepX = { 1, -1, 0, 0, 0, 0 };

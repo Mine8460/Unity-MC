@@ -685,12 +685,13 @@ MonoBehaviour:
   maxFluidUpdatesPerTick: 4096
   playerInventory: {fileID: 981828843}
   logPlacementFailures: 1
+  redstoneEnabled: 1
   maxBlockUpdatesPerFrame: 256
   chunkMaterial: {fileID: 2100000, guid: eb2d557371650164da0ba75562715aa7, type: 2}
   waterMaterial: {fileID: 2100000, guid: cc806ef781deaa74bbdd7d045f35f065, type: 2}
   smoothLighting: 1
   player: {fileID: 981828837}
-  renderDistance: 6
+  renderDistance: 24
   workerThreads: 0
   maxGenerationsInFlight: 6
   maxMeshJobsInFlight: 6
@@ -749,7 +750,7 @@ MonoBehaviour:
   moonColor: {r: 0.55, g: 0.65, b: 1, a: 1}
   sunTilt: 0
   sunYaw: 0
-  sunAngleStep: 1
+  sunAngleStep: 0.25
   nightSkyLight: 0.2
   voxelSky: 1
   skyMaterial: {fileID: 2100000, guid: ebb99d97f75c3604faf722048a784659, type: 2}
@@ -1002,6 +1003,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Inventory
   world: {fileID: 628363072}
   cameraTransform: {fileID: 239091772}
+  toggleKey: 101
+  dropKey: 103
   giveTestItems: 1
   startItems: []
   saveToDisk: 0

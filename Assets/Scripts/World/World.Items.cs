@@ -85,7 +85,9 @@ public partial class World
             : ItemDatabase.FromBlock(info.dropOverride != BlockType.Air ? info.dropOverride : type);
 
         var velocity = new Vector3(Random.Range(-1f, 1f), Random.Range(2.5f, 3.5f), Random.Range(-1f, 1f));
-        DropItem(item, Mathf.Max(1, (int)info.dropCount), position, velocity);
+        int count = Mathf.Max(1, (int)info.dropCount);
+        if (info.dropCountRandom > 0) count += Random.Range(0, info.dropCountRandom + 1);
+        DropItem(item, count, position, velocity);
     }
 
     // Casse un bloc : il disparaît et lâche son objet.

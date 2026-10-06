@@ -25,6 +25,10 @@ public partial class Chunk
                 break;
             }
 
+            case BlockShape.Wire:
+            case BlockShape.Repeater:
+                break; // pas d'icône 3D : ils sont lâchés sous forme d'objet (poussière, répéteur)
+
             case BlockShape.Model:
                 if (info.elements != null)
                 {

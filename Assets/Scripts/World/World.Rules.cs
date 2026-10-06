@@ -47,8 +47,15 @@ public partial class World
         switch (info.support)
         {
             case SupportRule.SolidBelow: return below.shape == BlockShape.Cube && below.collidable;
-            case SupportRule.SolidBehind: return behind.shape == BlockShape.Cube && behind.collidable;
             case SupportRule.SoilBelow:  return below.isSoil;
+            case SupportRule.SolidBehind: return behind.shape == BlockShape.Cube && behind.collidable;
+            case SupportRule.OpaqueBelow: return below.opaque; // cube plein et opaque (le verre ne convient pas)
+            case SupportRule.SolidAttached:
+            {
+                Vector3Int d = info.attachDir;
+                BlockInfo wall = BlockDatabase.Get(GetBlock(x + d.x, y + d.y, z + d.z));
+                return wall.shape == BlockShape.Cube && wall.collidable;
+            }
             default:                     return true;
         }
     }

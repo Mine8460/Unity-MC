@@ -125,6 +125,7 @@ public partial class World : MonoBehaviour
         // (modèles Blockbench). Il DOIT s'exécuter ici, sur le thread principal, avant tout thread secondaire.
         BlockDatabase.Get(BlockType.Air);
         ChunkMesher.SmoothLighting = smoothLighting; // avant le démarrage des threads de maillage
+        ApplyBlockAtlas();
 
         if (player == null && Camera.main != null)
             player = Camera.main.transform;
@@ -174,6 +175,7 @@ public partial class World : MonoBehaviour
     {
         ProcessBlockUpdates();
         ProcessFluids(Time.deltaTime);
+        ProcessRedstone(Time.deltaTime);
 
         if (player == null || workers == null) return;
 
@@ -642,6 +644,39 @@ public partial class World : MonoBehaviour
         return chunk.GetLocalBlock(worldX & Chunk.MaskXZ, worldY, worldZ & Chunk.MaskXZ);
     }
 
+    // L'atlas est assemblé au lancement à partir des fichiers de blocs : on le donne à des COPIES des matériaux
+    // (ton matériau d'origine n'est jamais modifié), avec le nombre de tuiles et leur taille.
+    void ApplyBlockAtlas()
+    {
+        if (chunkMaterial != null)
+        {
+            chunkMaterial = new Material(chunkMaterial) { name = chunkMaterial.name + " (atlas)" };
+            SetTextureIf(chunkMaterial, "_BaseMap", BlockDatabase.Atlas);
+            SetTextureIf(chunkMaterial, "_HeightMap", BlockDatabase.HeightAtlas);
+            SetTextureIf(chunkMaterial, "_MetallicGlossMap", BlockDatabase.MetallicAtlas);
+            SetTextureIf(chunkMaterial, "_EmissionMap", BlockDatabase.EmissionAtlas);
+            SetFloatIf(chunkMaterial, "_AtlasTiles", BlockDatabase.AtlasTilesPerRow);
+            SetFloatIf(chunkMaterial, "_PixelsPerBlock", BlockDatabase.TilePixels);
+        }
+        if (waterMaterial != null)
+        {
+            waterMaterial = new Material(waterMaterial) { name = waterMaterial.name + " (atlas)" };
+            SetTextureIf(waterMaterial, "_BaseMap", BlockDatabase.Atlas);
+            SetFloatIf(waterMaterial, "_AtlasTiles", BlockDatabase.AtlasTilesPerRow);
+            SetFloatIf(waterMaterial, "_PixelsPerTile", BlockDatabase.TilePixels);
+        }
+    }
+
+    static void SetTextureIf(Material m, string property, Texture texture)
+    {
+        if (texture != null && m.HasProperty(property)) m.SetTexture(property, texture);
+    }
+
+    static void SetFloatIf(Material m, string property, float value)
+    {
+        if (m.HasProperty(property)) m.SetFloat(property, value);
+    }
+
     // Hauteur où l'on peut se tenir debout dans la colonne (x, z) : dessus du plus haut bloc solide.
     // Les feuilles et l'herbe haute (sans collision) sont ignorées. Le chunk doit être chargé.
     public float GetSurfaceY(int worldX, int worldZ)
@@ -657,6 +692,12 @@ public partial class World : MonoBehaviour
             if (top > 0f) return y + top;
         }
         return 0f;
+    }
+
+    // Pose un bloc avec son ÉTAT (répéteur : sens et délai). Remaille tout de suite, comme SetBlock.
+    public bool PlaceBlockWithState(int worldX, int worldY, int worldZ, BlockType type, byte state)
+    {
+        return SetBlockAndState(worldX, worldY, worldZ, type, state, false);
     }
 
     // État d'un bloc à une position MONDE (niveau de l'eau...). 0 si le chunk n'est pas chargé.
@@ -718,6 +759,9 @@ public partial class World : MonoBehaviour
         }
 
         if (old != type) QueueNeighborUpdates(worldX, worldY, worldZ);
+
+        // La redstone autour (et ici) doit être recalculée
+        if (redstoneEnabled) NotifyRedstone(worldX, worldY, worldZ);
 
         // L'eau autour (et ici) doit peut-être couler, reculer ou se remplir
         ScheduleFluidAround(worldX, worldY, worldZ);

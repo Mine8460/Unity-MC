@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 // Inventaire du joueur : 9 cases de barre d'accès + 27 cases d'inventaire, piles de 64 maximum.
 // À mettre sur le GameObject du joueur.
@@ -20,8 +19,8 @@ public class Inventory : MonoBehaviour
     [SerializeField] Transform cameraTransform;
 
     [Header("Touches")]
-    InputAction dropAction;
-    InputAction inventoryAction;
+    [SerializeField] KeyCode toggleKey = KeyCode.E;
+    [SerializeField] KeyCode dropKey = KeyCode.G;   // Ctrl + touche : toute la pile
 
     [Header("Départ")]
     [Tooltip("Donne des objets de test au premier lancement (sans sauvegarde)")]
@@ -68,14 +67,6 @@ public class Inventory : MonoBehaviour
         if (!Load()) GiveStartItems();
     }
 
-    private void Start()
-    {
-        inventoryAction = InputSystem.actions.FindAction("Inventory");
-        inventoryAction.performed += OnOpenInventory;
-        dropAction = InputSystem.actions.FindAction("Drop");
-        dropAction.performed += OnDropItem;
-    }
-
     static T FindFirst<T>() where T : UnityEngine.Object
     {
 #if UNITY_2023_1_OR_NEWER
@@ -95,21 +86,50 @@ public class Inventory : MonoBehaviour
             return;
         }
 
+        Add(BlockType.Stone, 64);
+        Add(BlockType.Dirt, 64);
+        Add(BlockType.Log, 32);
+        Add(BlockType.Glass, 32);
+        Add(BlockType.Torch, 32);
+        Add(BlockType.StoneSlab, 32);
+        Add(BlockType.Anvil, 8);
+        Add(BlockType.Sand, 16);
+
+        // Outils, en attendant l'artisanat
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
         Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.DiamondAxe, 1);
-        Add(ItemType.DiamondShovel, 1);
-        Add(BlockType.Log, 64);
-        Add(BlockType.Planks, 64);
-        Add(BlockType.CraftingTable, 1);
-        Add(BlockType.Glass, 64);
-        Add(BlockType.Torch, 64);
-        Add(BlockType.StoneSlab, 64);
-        Add(BlockType.Anvil, 64);
+        Add(ItemType.IronAxe, 1);
+        Add(ItemType.IronShovel, 1);
+        Add(ItemType.Stick, 16);
+
+        // Redstone, pour tester
+        Add(ItemType.RedstoneDust, 64);
+        Add(ItemType.Repeater, 8);
+        Add((BlockType)Redstone.LeverOff, 8);
+        Add((BlockType)Redstone.ButtonOff, 8);
+        Add((BlockType)Redstone.TorchLit, 16);
+        Add((BlockType)Redstone.Lamp, 16);
+        Add((BlockType)Redstone.Block, 16);
+
+        // Outils pour tester (en attendant l'artisanat)
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.StoneAxe, 1);
+        Add(ItemType.StoneShovel, 1);
     }
 
     void Update()
     {
-        if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
+        if (Input.GetKeyDown(toggleKey))
+        {
+            if (!IsOpen) CraftingSize = 2; // E : l'inventaire, avec la grille 2 x 2
+            SetOpen(!IsOpen);
+        }
+        else if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
 
         // Sauvegarde automatique toutes les 30 secondes s'il y a eu un changement
         saveTimer += Time.unscaledDeltaTime;
@@ -131,23 +151,8 @@ public class Inventory : MonoBehaviour
         float wheel = Input.mouseScrollDelta.y;
         if (wheel > 0f) Select(selected - 1);
         else if (wheel < 0f) Select(selected + 1);
-    }
 
-    void OnDropItem(InputAction.CallbackContext context)
-    {
-        if (context.performed)
-        {
-            DropSelected(Input.GetKey(KeyCode.LeftControl));
-        }
-    }
-
-    void OnOpenInventory(InputAction.CallbackContext context)
-    {
-        if (context.performed)
-        {
-            if (!IsOpen) CraftingSize = 2; // E : l'inventaire, avec la grille 2 x 2
-            SetOpen(!IsOpen);
-        }
+        if (Input.GetKeyDown(dropKey)) DropSelected(Input.GetKey(KeyCode.LeftControl));
     }
 
     void OnApplicationQuit()
@@ -216,11 +221,12 @@ public class Inventory : MonoBehaviour
     public ItemStack SelectedStack => slots[selected];
 
     // Le BLOC de la case sélectionnée (false si elle est vide ou si ce n'est pas un bloc : outil, lingot...)
+    // Pour la poussière de redstone et le répéteur (des objets qui ne sont pas des blocs), c'est le bloc qu'ils posent.
     public bool TryGetSelected(out BlockType type)
     {
         ItemStack stack = slots[selected];
-        type = stack.Block;
-        return stack.IsBlock;
+        type = stack.IsEmpty ? BlockType.Air : ItemDatabase.PlacedBlock(stack.type);
+        return type != BlockType.Air;
     }
 
     // Abîme l'outil sélectionné ; il casse quand son usure atteint sa durabilité

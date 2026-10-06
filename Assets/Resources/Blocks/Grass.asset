@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: Grass
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 2
+  displayName: Grass
+  shape: 0
+  side:
+    albedo: {fileID: 2800000, guid: bf0483b34de4ce24c8236e29709c273b, type: 3}
+    height: {fileID: 2800000, guid: e9e51bdec8495354686526544435fcc5, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  top:
+    albedo: {fileID: 2800000, guid: 75db8857a0e62374b898a9d163e9ca8a, type: 3}
+    height: {fileID: 2800000, guid: 1b6b32d9e627ebf49960a35abb4c95eb, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  bottom:
+    albedo: {fileID: 2800000, guid: 3e0bac08c539935409c8235a4782d3b0, type: 3}
+    height: {fileID: 2800000, guid: 5f94bffd3d370664cbd25365e117a69a, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 0}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  opaque: 1
+  collidable: 1
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 1
+  gravity: 0
+  support: 0
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 0
+  breakTime: 2
+  tool: 3
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 11400000, guid: 31e542ca97bef7349a2256a23c383e9a, type: 2}
+  dropItem: 0
+  dropCount: 0

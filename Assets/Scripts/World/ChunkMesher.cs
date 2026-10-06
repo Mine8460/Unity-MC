@@ -34,6 +34,9 @@ public sealed class MeshBuffers
     public readonly List<bool> flat = new List<bool>(16384);
     public readonly HashSet<int> flipQuads = new HashSet<int>();
 
+    // Redstone : (début, fin, puissance 0 à 15) des sommets teintés selon la puissance (fil, torches du répéteur)
+    public readonly List<Vector3Int> wirePower = new List<Vector3Int>(64);
+
     public bool failed;
 
     public void Clear()
@@ -52,6 +55,7 @@ public sealed class MeshBuffers
         waterRanges.Clear();
         flat.Clear();
         flipQuads.Clear();
+        wirePower.Clear();
         failed = false;
     }
 
@@ -96,8 +100,22 @@ public sealed class ChunkMesher
     // pour le rendu et pour le mesh de raycast
     readonly BlockType[] nb = new BlockType[6];
 
+    // Lecture des blocs (chunk et voisins) pour les règles de la redstone ; une case inconnue compte comme de l'air
+    sealed class RedstoneView : IBlockView
+    {
+        readonly ChunkMesher m;
+        public RedstoneView(ChunkMesher mesher) { m = mesher; }
+
+        public BlockType TypeAt(int x, int y, int z) => m.TryCell(x, y, z, out BlockType t, out _) ? t : BlockType.Air;
+        public byte StateAt(int x, int y, int z) => m.TryCell(x, y, z, out _, out byte st) ? st : (byte)0;
+    }
+
+    readonly RedstoneView view;
+    readonly int[] wireConn = new int[4];
+
     ChunkMesher(ChunkSnapshot snapshot, MeshBuffers buffers)
     {
+        view = new RedstoneView(this);
         s = snapshot;
         buf = buffers;
         originX = snapshot.center.coord.x * Chunk.SizeX;
@@ -357,6 +375,14 @@ public sealed class ChunkMesher
 
         // Lumière des torches (R) et du ciel (G) de chaque face
         ApplyVertexLight();
+
+        // Redstone : la puissance (0 à 15) dans le canal bleu, que le shader transforme en teinte
+        foreach (Vector3Int w in buf.wirePower)
+            for (int i = w.x; i < w.y; i++)
+            {
+                Color32 prev = buf.colors[i];
+                buf.colors[i] = new Color32(prev.r, prev.g, (byte)(w.z * 17), prev.a);
+            }
     }
 
     void AddBlock(BlockType type, int x, int y, int z)
@@ -381,6 +407,14 @@ public sealed class ChunkMesher
 
             case BlockShape.Model:
                 AddModel(in info, type, pos, x, y, z);
+                break;
+
+            case BlockShape.Wire:
+                AddWire(in info, pos, x, y, z);
+                break;
+
+            case BlockShape.Repeater:
+                AddRepeater(in info, pos, x, y, z);
                 break;
 
             default: // Cube
@@ -423,6 +457,130 @@ public sealed class ChunkMesher
                 for (int f = 0; f < 6; f++)
                     AddBoxFace(buf.colVerts, buf.colTris, null, null, pos, bmin, bmax, f, 0);
             }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Redstone
+    // ------------------------------------------------------------------
+
+    const float WireHeight = 0.02f;   // au-dessus du bloc : évite de clignoter avec sa face
+
+    // Poussière : un point, ou un trait qui suit ses raccords (lignes, coins, croisements). Quand un raccord monte sur
+    // le bloc voisin, un trait grimpe aussi le long de sa face. La couleur dépend de la puissance (lue dans l'état).
+    void AddWire(in BlockInfo info, Vector3 pos, int x, int y, int z)
+    {
+        TryCell(x, y, z, out _, out byte power);
+        Redstone.WireShape(view, x, y, z, wireConn);
+
+        int start = buf.vertices.Count;
+        int tile = info.tileSide;
+        const float a0 = 6f / 16f, a1 = 10f / 16f;
+
+        bool connected = wireConn[0] > 0 || wireConn[1] > 0 || wireConn[2] > 0 || wireConn[3] > 0;
+        if (!connected) FlatWirePatch(pos, 5f / 16f, 5f / 16f, 11f / 16f, 11f / 16f, tile);   // un point
+        else FlatWirePatch(pos, a0, a0, a1, a1, tile);                                       // le centre
+
+        // Branches : nord (+Z), est (+X), sud (-Z), ouest (-X)
+        if (wireConn[0] > 0) FlatWirePatch(pos, a0, a1, a1, 1f, tile);
+        if (wireConn[1] > 0) FlatWirePatch(pos, a1, a0, 1f, a1, tile);
+        if (wireConn[2] > 0) FlatWirePatch(pos, a0, 0f, a1, a0, tile);
+        if (wireConn[3] > 0) FlatWirePatch(pos, 0f, a0, a0, a1, tile);
+
+        // Branches qui montent : un trait vertical contre la face du bloc voisin
+        const float e = 0.02f;
+        if (wireConn[0] == 2) AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, new Vector3(a0, 0f, 1f - e), new Vector3(a1, 1f, 1f - e * 0.5f), 3, tile);
+        if (wireConn[1] == 2) AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, new Vector3(1f - e, 0f, a0), new Vector3(1f - e * 0.5f, 1f, a1), 5, tile);
+        if (wireConn[2] == 2) AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, new Vector3(a0, 0f, e * 0.5f), new Vector3(a1, 1f, e), 2, tile);
+        if (wireConn[3] == 2) AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, new Vector3(e * 0.5f, 0f, a0), new Vector3(e, 1f, a1), 4, tile);
+
+        MarkWire(start, power);
+    }
+
+    // Un rectangle à plat sur le sol, légèrement au-dessus
+    void FlatWirePatch(Vector3 pos, float x0, float z0, float x1, float z1, int tile)
+    {
+        AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos,
+                   new Vector3(x0, 0f, z0), new Vector3(x1, WireHeight, z1), 0, tile);
+    }
+
+    // Les sommets ajoutés depuis `start` sont teintés selon la puissance (mode d'éclairage « Wire » du shader)
+    void MarkWire(int start, int power)
+    {
+        int end = buf.vertices.Count;
+        if (end <= start) return;
+
+        buf.litRanges.Add(new Vector3Int(start, end, (int)LightMode.Wire));
+        buf.wirePower.Add(new Vector3Int(start, end, power));
+    }
+
+    // Répéteur : une dalle de 2/16 dont le dessus (une flèche) est tourné vers sa sortie, et deux torches.
+    // La torche du fond est fixe ; l'autre recule quand le délai augmente.
+    void AddRepeater(in BlockInfo info, Vector3 pos, int x, int y, int z)
+    {
+        TryCell(x, y, z, out _, out byte state);
+        int facing = Redstone.RepeaterFacing(state);
+        int delay = Redstone.RepeaterDelay(state);
+        bool powered = Redstone.RepeaterPowered(state);
+
+        const float h = 2f / 16f;
+        var min = Vector3.zero;
+        var max = new Vector3(1f, h, 1f);
+
+        for (int f = 2; f < 6; f++)
+            AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, min, max, f, info.tileSide);
+
+        // Dessus : la texture tournée pour que sa flèche (vers le haut de l'image) regarde la sortie
+        int top = buf.vertices.Count;
+        buf.vertices.Add(pos + new Vector3(0f, h, 0f));
+        buf.vertices.Add(pos + new Vector3(0f, h, 1f));
+        buf.vertices.Add(pos + new Vector3(1f, h, 1f));
+        buf.vertices.Add(pos + new Vector3(1f, h, 0f));
+        for (int k = 0; k < 4; k++)
+        {
+            Vector3 v = buf.vertices[top + k] - pos;
+            Vector2 uv = RotatedTopUV(v.x, v.z, facing);
+            buf.normals.Add(Vector3.up);
+            buf.uvs.Add(BlockDatabase.TileUV(info.tileTop, uv.x, uv.y));
+        }
+        buf.triangles.Add(top); buf.triangles.Add(top + 1); buf.triangles.Add(top + 2);
+        buf.triangles.Add(top); buf.triangles.Add(top + 2); buf.triangles.Add(top + 3);
+
+        // Les deux torches (teintées : rouge vif quand le répéteur est allumé, sombre sinon)
+        int start = buf.vertices.Count;
+        Vector3Int fwd = Redstone.Horizontal[facing];
+        float outputPos = 0.8125f;                    // près de la sortie
+        float delayPos = 0.6875f - 0.125f * delay;    // recule avec le délai
+        AddRepeaterTorch(pos, fwd, outputPos, h, info.tileBottom);
+        AddRepeaterTorch(pos, fwd, delayPos, h, info.tileBottom);
+        MarkWire(start, powered ? Redstone.MaxPower : 0);
+    }
+
+    // Une petite torche de 2 x 5 x 2 pixels, à la distance s (0 = fond, 1 = sortie) le long du sens du répéteur
+    void AddRepeaterTorch(Vector3 pos, Vector3Int fwd, float s, float baseHeight, int tile)
+    {
+        float cx = 0.5f + fwd.x * (s - 0.5f);
+        float cz = 0.5f + fwd.z * (s - 0.5f);
+        const float r = 1f / 16f;
+        var min = new Vector3(cx - r, baseHeight, cz - r);
+        var max = new Vector3(cx + r, baseHeight + 5f / 16f, cz + r);
+
+        for (int f = 0; f < 6; f++)
+        {
+            if (f == 1) continue; // le dessous est caché
+            AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos, min, max, f, tile);
+        }
+    }
+
+    // UV du dessus du répéteur : la flèche de la texture (vers le haut de l'image) suit le sens de sortie
+    static Vector2 RotatedTopUV(float x, float z, int facing)
+    {
+        switch (facing)
+        {
+            case 0:  return new Vector2(x, z);               // sortie au nord (+Z)
+            case 1:  return new Vector2(1f - z, x);          // est (+X)
+            case 2:  return new Vector2(1f - x, 1f - z);     // sud (-Z)
+            default: return new Vector2(z, 1f - x);          // ouest (-X)
         }
     }
 

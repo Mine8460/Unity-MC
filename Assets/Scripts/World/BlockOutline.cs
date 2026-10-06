@@ -23,7 +23,7 @@ public class BlockOutline : MonoBehaviour
     [SerializeField, Range(0f, 0.02f)] float padding = 0.002f;
 
     static readonly Box[] FullBoxes = { new Box(Vector3.zero, Vector3.one) };
-    static readonly Box[] PlantBoxes = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.7f, 0.6f, 0.7f)) };
+    static readonly Box[] PlantBoxes = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.9f, 1f, 0.9f)) };
 
     // Les 6 faces d'un prisme (8 sommets : le bit 0 = x, le bit 1 = y, le bit 2 = z)
     static readonly int[] PrismTriangles =
@@ -148,8 +148,8 @@ public class BlockOutline : MonoBehaviour
                     return boxes;
                 }
 
-                // Modèle importé de Blockbench : ses boîtes de collision, sinon le bloc entier
-                return info.collisionBoxes ?? FullBoxes;
+                // Fil, répéteur, modèle importé de Blockbench : la zone visée, sinon la collision, sinon le bloc entier
+                return info.selectionBoxes ?? info.collisionBoxes ?? FullBoxes;
         }
     }
 

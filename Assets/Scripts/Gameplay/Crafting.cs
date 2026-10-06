@@ -38,6 +38,18 @@ public static class Crafting
         Shaped(BlockType.Torch, 4, new[] { "C", "S" }, K('C', ItemType.Coal), K('S', ItemType.Stick));
         Shaped(BlockType.StoneSlab, 6, new[] { "SSS" }, K('S', stone));
 
+        // Redstone
+        ItemType dust = ItemType.RedstoneDust;
+        ItemType redstoneTorch = ItemDatabase.FromBlock((BlockType)Redstone.TorchLit);
+        Shaped((BlockType)Redstone.TorchLit, 1, new[] { "R", "S" }, K('R', dust), K('S', ItemType.Stick));
+        Shaped((BlockType)Redstone.LeverOff, 1, new[] { "S", "C" }, K('S', ItemType.Stick), K('C', stone));
+        Shaped((BlockType)Redstone.ButtonOff, 1, new[] { "C" }, K('C', stone));
+        Shaped((BlockType)Redstone.Block, 1, new[] { "RRR", "RRR", "RRR" }, K('R', dust));
+        Shaped(dust, 9, new[] { "B" }, K('B', ItemDatabase.FromBlock((BlockType)Redstone.Block)));
+        // Lampe : de la poussière autour d'un bloc de verre (Minecraft demande de la pierre lumineuse)
+        Shaped((BlockType)Redstone.Lamp, 1, new[] { " R ", "RGR", " R " }, K('R', dust), K('G', ItemDatabase.FromBlock(BlockType.Glass)));
+        Shaped(ItemType.Repeater, 1, new[] { "TRT", "SSS" }, K('T', redstoneTorch), K('R', dust), K('S', stone));
+
         // Outils : bois (planches), pierre, fer, or, diamant — dans l'ordre des outils de ItemType
         ItemType[] materials = { planks, stone, ItemType.IronIngot, ItemType.GoldIngot, ItemType.Diamond };
         for (int m = 0; m < materials.Length; m++)

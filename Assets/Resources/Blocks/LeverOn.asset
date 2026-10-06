@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: LeverOn
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 84
+  displayName: Lever
+  shape: 2
+  side:
+    albedo: {fileID: 2800000, guid: b2c67b83bb32f7f41bb34bb4c3e87a73, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  top:
+    albedo: {fileID: 2800000, guid: b2c67b83bb32f7f41bb34bb4c3e87a73, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  bottom:
+    albedo: {fileID: 2800000, guid: b2c67b83bb32f7f41bb34bb4c3e87a73, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 4900000, guid: 063dc32cd618a7c43ac7246f510b53eb, type: 3}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  opaque: 0
+  collidable: 0
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 0
+  gravity: 0
+  support: 1
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 1
+  breakTime: 0
+  tool: 0
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 11400000, guid: 0e52e0be3cd80b949b7f69d379bb64c1, type: 2}
+  dropItem: 0
+  dropCount: 0
+  dropCountRandom: 0

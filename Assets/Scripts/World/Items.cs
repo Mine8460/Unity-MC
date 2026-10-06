@@ -19,6 +19,9 @@ public enum ItemType : ushort
     WoodenPickaxe, StonePickaxe, IronPickaxe, GoldenPickaxe, DiamondPickaxe,
     WoodenAxe, StoneAxe, IronAxe, GoldenAxe, DiamondAxe,
     WoodenShovel, StoneShovel, IronShovel, GoldenShovel, DiamondShovel,
+
+    RedstoneDust,   // se pose en fil (bloc RedstoneDust)
+    Repeater,       // se pose en répéteur (bloc Repeater)
 }
 
 // Outil qui convient à un bloc (BlockInfo.tool) ou type d'un outil (ItemInfo.tool)
@@ -58,6 +61,8 @@ public static class ItemDatabase
         Material(ItemType.GoldIngot, "Lingot d'or",   new Color32(246, 211,  68, 255));
         Material(ItemType.Diamond,   "Diamant",       new Color32( 82, 228, 214, 255));
         Material(ItemType.Stick,     "Bâton",         new Color32(122,  90,  46, 255));
+        Material(ItemType.RedstoneDust, "Poussière de redstone", new Color32(205, 30, 24, 255));
+        Material(ItemType.Repeater,     "Répéteur",              new Color32(125, 125, 125, 255));
 
         for (int m = 0; m < Materials.Length; m++)
         {
@@ -65,6 +70,16 @@ public static class ItemDatabase
             Tool((ItemType)((int)ItemType.WoodenAxe + m),     ToolKind.Axe,     "Hache " + Materials[m].name, m);
             Tool((ItemType)((int)ItemType.WoodenShovel + m),  ToolKind.Shovel,  "Pelle " + Materials[m].name, m);
         }
+    }
+
+    // Le bloc qu'un objet pose : le bloc lui-même, ou (pour la poussière et le répéteur, qui ne sont pas des blocs
+    // de l'inventaire) le bloc correspondant. Air = l'objet ne se pose pas.
+    public static BlockType PlacedBlock(ItemType type)
+    {
+        if (IsBlock(type)) return ToBlock(type);
+        if (type == ItemType.RedstoneDust) return (BlockType)Redstone.Dust;
+        if (type == ItemType.Repeater) return (BlockType)Redstone.Repeater;
+        return BlockType.Air;
     }
 
     static void Material(ItemType type, string name, Color32 color)
@@ -101,8 +116,7 @@ public static class ItemDatabase
     public static string Name(ItemType type) => Get(type).name;
 
     // « StoneSlabTop » -> « Stone Slab Top »
-    static string BlockName(BlockType block) =>
-        System.Text.RegularExpressions.Regex.Replace(block.ToString(), "(?<!^)([A-Z])", " $1");
+    static string BlockName(BlockType block) => BlockDatabase.Name(block); // « Display Name » du fichier du bloc
 
     // ------------------------------------------------------------------
     // Casse des blocs avec un outil
@@ -163,6 +177,34 @@ public static class ItemIcons
         return tex;
     }
 
+    // Pixels de l'icône d'un objet (ligne du BAS en premier), à sa taille réelle : celle de ton image
+    // Resources/Items/<Objet>.png si elle existe (même non « Read/Write »), sinon l'icône générée.
+    public static void GetPixels(ItemType type, out Color32[] pixels, out int width, out int height)
+    {
+        Texture2D tex = Get(type);
+        width = tex.width;
+        height = tex.height;
+
+        if (tex.isReadable)
+        {
+            pixels = tex.GetPixels32();
+            return;
+        }
+
+        // Image non lisible : on la recopie dans une RenderTexture que l'on relit
+        RenderTexture rt = RenderTexture.GetTemporary(width, height, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+        Graphics.Blit(tex, rt);
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = rt;
+        var copy = new Texture2D(width, height, TextureFormat.RGBA32, false);
+        copy.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+        copy.Apply();
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(rt);
+        pixels = copy.GetPixels32();
+        UnityEngine.Object.Destroy(copy);
+    }
+
     // ------------------------------------------------------------------
     // Génération (fonction pure : testable hors d'Unity)
     // ------------------------------------------------------------------
@@ -183,6 +225,8 @@ public static class ItemIcons
             case ItemType.IronIngot:
             case ItemType.GoldIngot: DrawIngot(px, c); break;
             case ItemType.Diamond: DrawGem(px, c); break;
+            case ItemType.RedstoneDust: DrawDustPile(px); break;
+            case ItemType.Repeater: DrawRepeaterIcon(px); break;
             default:
                 if (info.tool == ToolKind.None) break;
                 DrawHandle(px, 2, 13, 10, 5);
@@ -234,6 +278,33 @@ public static class ItemIcons
             if (dx < -0.5f || dy < -0.5f) continue;    // seulement le quart haut-droit
             if (r >= 10.6f && r < 12.6f) Set(px, x, y, r < 11.6f ? c : Shade(c, 0.7f));
         }
+    }
+
+    // Poussière de redstone : un petit tas rouge
+    static void DrawDustPile(Color32[] px)
+    {
+        for (int y = 3; y <= 11; y++)
+        for (int x = 2; x <= 13; x++)
+        {
+            float dx = (x - 7.5f) / 5.8f, dy = (y - 6.5f) / 3.8f;
+            if (dx * dx + dy * dy > 1f) continue;
+
+            float shade = 0.75f + 0.25f * ((x * 7 + y * 13) % 5) / 4f + (y - 3) * 0.02f;
+            Set(px, x, y, new Color32((byte)Mathf.Min(255, 225 * shade), (byte)(28 * shade), (byte)(20 * shade), 255));
+        }
+    }
+
+    // Répéteur : une dalle grise avec deux petites torches rouges
+    static void DrawRepeaterIcon(Color32[] px)
+    {
+        for (int y = 3; y <= 6; y++)
+        for (int x = 1; x <= 14; x++)
+            Set(px, x, y, y == 6 ? new Color32(170, 170, 170, 255) : new Color32(120, 120, 120, 255));
+
+        foreach (int tx in new[] { 4, 10 })
+        for (int y = 7; y <= 11; y++)
+        for (int x = tx; x <= tx + 1; x++)
+            Set(px, x, y, y >= 10 ? new Color32(235, 40, 30, 255) : new Color32(122, 88, 48, 255));
     }
 
     // Tête de hache : une lame large d'un seul côté du haut du manche (vers le haut-gauche), au tranchant plus clair

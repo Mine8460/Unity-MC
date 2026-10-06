@@ -130,18 +130,18 @@ public class InventoryUI : MonoBehaviour
         // Artisanat : titre, grille (colonnes 2 à 4), flèche (colonne 5), résultat (colonne 6)
         craftTitle = CreateLabel(panel, new Vector2(pad, -pad), new Vector2(slotSize + gap, slotSize), 15, TextAnchor.UpperLeft);
         for (int row = 0; row < 3; row++)
-        for (int col = 0; col < 3; col++)
-            craftSlots[row * 3 + col] = CreateSlot(panel, new Vector2(pad + (col + 1) * (slotSize + gap), -(pad + row * (slotSize + gap))));
+            for (int col = 0; col < 3; col++)
+                craftSlots[row * 3 + col] = CreateSlot(panel, new Vector2(pad + (col + 1) * (slotSize + gap), -(pad + row * (slotSize + gap))));
         CreateLabel(panel, new Vector2(pad + 4 * (slotSize + gap), -(pad + (slotSize + gap))), new Vector2(slotSize, slotSize), 30, TextAnchor.MiddleCenter).text = "→";
         resultView = CreateSlot(panel, new Vector2(pad + 5 * (slotSize + gap) + gap, -(pad + (slotSize + gap))));
 
         // 3 rangées d'inventaire (cases 9 à 35)
         for (int row = 0; row < 3; row++)
-        for (int col = 0; col < 9; col++)
-        {
-            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + row * (slotSize + gap)));
-            panelSlots[9 + row * 9 + col] = CreateSlot(panel, pos);
-        }
+            for (int col = 0; col < 9; col++)
+            {
+                Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + row * (slotSize + gap)));
+                panelSlots[9 + row * 9 + col] = CreateSlot(panel, pos);
+            }
 
         // la barre d'accès, en bas (cases 0 à 8)
         for (int col = 0; col < 9; col++)
@@ -301,8 +301,10 @@ public class InventoryUI : MonoBehaviour
     void Refresh()
     {
         bool open = Inventory.IsOpen;
-        hud.gameObject.SetActive(!open);
-        panel.gameObject.SetActive(open);
+        if (hud != null)
+            hud.gameObject.SetActive(!open);
+        if (panel != null)
+            panel.gameObject.SetActive(open);
 
         for (int i = 0; i < Inventory.HotbarSize; i++)
             Fill(hudSlots[i], inventory.GetSlot(i), i == inventory.Selected);
@@ -314,13 +316,13 @@ public class InventoryUI : MonoBehaviour
         int size = inventory.CraftingSize;
         craftTitle.text = size == 3 ? "Établi" : "Artisanat";
         for (int row = 0; row < 3; row++)
-        for (int col = 0; col < 3; col++)
-        {
-            SlotView view = craftSlots[row * 3 + col];
-            bool used = row < size && col < size;
-            view.rect.gameObject.SetActive(used);
-            if (used) Fill(view, inventory.GetCraftSlot(row * size + col), false);
-        }
+            for (int col = 0; col < 3; col++)
+            {
+                SlotView view = craftSlots[row * 3 + col];
+                bool used = row < size && col < size;
+                view.rect.gameObject.SetActive(used);
+                if (used) Fill(view, inventory.GetCraftSlot(row * size + col), false);
+            }
         Fill(resultView, inventory.CraftResult, false);
 
         Fill(heldView, inventory.HeldStack, false);
@@ -341,6 +343,7 @@ public class InventoryUI : MonoBehaviour
 
     static void Fill(SlotView view, ItemStack stack, bool selected)
     {
+        if (view == null) return;
         view.icon.SetItem(stack.IsEmpty ? ItemType.None : stack.type);
         view.count.text = stack.count > 1 ? stack.count.ToString() : "";
         if (view.frame != null) view.frame.SetActive(selected);
@@ -348,6 +351,7 @@ public class InventoryUI : MonoBehaviour
         // Usure : seulement pour un outil déjà abîmé
         int durability = stack.IsEmpty ? 0 : ItemDatabase.Get(stack.type).durability;
         bool worn = durability > 0 && stack.damage > 0;
+        if (view.durability == null) return;
         view.durability.SetActive(worn);
         if (worn)
         {
@@ -386,14 +390,14 @@ public class InventoryUI : MonoBehaviour
         int size = inventory.CraftingSize;
         int hoveredCraft = -1;
         for (int row = 0; row < size && hoveredCraft < 0; row++)
-        for (int col = 0; col < size; col++)
-        {
-            if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[row * 3 + col].rect, mouse, null))
+            for (int col = 0; col < size; col++)
             {
-                hoveredCraft = row * size + col;
-                break;
+                if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[row * 3 + col].rect, mouse, null))
+                {
+                    hoveredCraft = row * size + col;
+                    break;
+                }
             }
-        }
         bool hoveredResult = RectTransformUtility.RectangleContainsScreenPoint(resultView.rect, mouse, null);
 
         bool left = Input.GetMouseButtonDown(0);
@@ -554,10 +558,6 @@ public static class BlockIconCache
         {
             tex = Resources.Load<Texture2D>("Icons/" + t);
             customIcons[t] = tex;
-
-            Debug.Log(tex != null
-                ? $"[Icônes] {t} : image Resources/Icons/{t} utilisée"
-                : $"[Icônes] {t} : pas d'image Resources/Icons/{t}, rendu automatique");
         }
         return tex;
     }
@@ -599,22 +599,22 @@ public static class BlockIconCache
             int y0 = Mathf.Max(0, Mathf.FloorToInt(min.y)), y1 = Mathf.Min(IconSize - 1, Mathf.CeilToInt(max.y));
 
             for (int py = y0; py <= y1; py++)
-            for (int px = x0; px <= x1; px++)
-            {
-                float cx = px + 0.5f - p0.x, cy = py + 0.5f - p0.y;
-                float a = (cx * e2.y - cy * e2.x) / det;
-                float b = (e1.x * cy - e1.y * cx) / det;
-                if (a < 0f || a > 1f || b < 0f || b > 1f) continue;
+                for (int px = x0; px <= x1; px++)
+                {
+                    float cx = px + 0.5f - p0.x, cy = py + 0.5f - p0.y;
+                    float a = (cx * e2.y - cy * e2.x) / det;
+                    float b = (e1.x * cy - e1.y * cx) / det;
+                    if (a < 0f || a > 1f || b < 0f || b > 1f) continue;
 
-                Vector2 uv = uv0 + du * a + dv * b;
-                int tx = Mathf.Clamp((int)(uv.x * atlasWidth), 0, atlasWidth - 1);
-                int ty = Mathf.Clamp((int)(uv.y * atlasHeight), 0, atlasHeight - 1);
-                Color32 c = atlasPixels[ty * atlasWidth + tx];
-                if (c.a < 128) continue; // trous des feuilles, de la torche...
+                    Vector2 uv = uv0 + du * a + dv * b;
+                    int tx = Mathf.Clamp((int)(uv.x * atlasWidth), 0, atlasWidth - 1);
+                    int ty = Mathf.Clamp((int)(uv.y * atlasHeight), 0, atlasHeight - 1);
+                    Color32 c = atlasPixels[ty * atlasWidth + tx];
+                    if (c.a < 128) continue; // trous des feuilles, de la torche...
 
-                pixels[py * IconSize + px] = new Color32(
-                    (byte)(c.r * q.shade), (byte)(c.g * q.shade), (byte)(c.b * q.shade), 255);
-            }
+                    pixels[py * IconSize + px] = new Color32(
+                        (byte)(c.r * q.shade), (byte)(c.g * q.shade), (byte)(c.b * q.shade), 255);
+                }
         }
 
         var tex = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false)

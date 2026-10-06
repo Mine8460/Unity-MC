@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: RedstoneLamp
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 67
+  displayName: Redstone Lamp
+  shape: 0
+  side:
+    albedo: {fileID: 2800000, guid: 3d5d8db95ea062945b27cbbbe9911b85, type: 3}
+    height: {fileID: 2800000, guid: f43bbbdd18c7b3a4f8b79bb7cf4120db, type: 3}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  top:
+    albedo: {fileID: 2800000, guid: 3d5d8db95ea062945b27cbbbe9911b85, type: 3}
+    height: {fileID: 2800000, guid: f43bbbdd18c7b3a4f8b79bb7cf4120db, type: 3}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  bottom:
+    albedo: {fileID: 2800000, guid: 3d5d8db95ea062945b27cbbbe9911b85, type: 3}
+    height: {fileID: 2800000, guid: f43bbbdd18c7b3a4f8b79bb7cf4120db, type: 3}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 0}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  opaque: 1
+  collidable: 1
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 0
+  gravity: 0
+  support: 0
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 0
+  breakTime: 2
+  tool: 1
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 0}
+  dropItem: 0
+  dropCount: 0
+  dropCountRandom: 0

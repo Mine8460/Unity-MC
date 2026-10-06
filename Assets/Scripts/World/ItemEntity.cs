@@ -1,6 +1,6 @@
 using UnityEngine;
 
-// Objet au sol : un petit bloc (ou, pour un outil, un lingot..., son icône à plat) qui tourne, tombe,
+// Objet au sol : un petit bloc (ou, pour un outil, un lingot..., son icône en 3D) qui tourne, tombe,
 // rebondit sur le terrain et se ramasse en s'approchant.
 // La position du GameObject est le CENTRE DU BAS de sa boîte de collision.
 public class ItemEntity : MonoBehaviour
@@ -10,7 +10,7 @@ public class ItemEntity : MonoBehaviour
     const float MaxFallSpeed = 40f;
     const float MaxStep = 0.2f;        // déplacement max par sous-étape (inférieur à la boîte)
     const float ModelScale = 0.3f;
-    const float FlatScale = 0.45f;     // taille de l'icône d'un objet plat
+    const float FlatScale = 0.45f;     // largeur d'un objet extrudé (outil, lingot...)
     const float PickupRadius = 1.1f;
     const float MagnetRadius = 2.4f;
     const float MagnetSpeed = 7f;
@@ -28,8 +28,6 @@ public class ItemEntity : MonoBehaviour
     public ItemType Type => stack.type;
     public int Count => stack.count;
 
-    static Mesh flatMesh; // carré à deux faces, partagé par tous les objets plats
-
     public void Init(World world, ItemStack stack, Vector3 velocity, float pickupDelay)
     {
         this.world = world;
@@ -41,58 +39,9 @@ public class ItemEntity : MonoBehaviour
         pivot = new GameObject("Pivot").transform;
         pivot.SetParent(transform, false);
 
-        var model = new GameObject("Model");
-        model.transform.SetParent(pivot, false);
-        var meshRenderer = model.AddComponent<MeshRenderer>();
-        meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-
-        if (stack.IsBlock)
-        {
-            // Un bloc : son vrai mesh, en petit
-            model.transform.localScale = Vector3.one * ModelScale;
-            model.transform.localPosition = Vector3.one * (-ModelScale * 0.5f);
-            model.AddComponent<MeshFilter>().sharedMesh = world.GetBlockMesh(stack.Block);
-            meshRenderer.sharedMaterial = world.ChunkMaterial;
-        }
-        else
-        {
-            // Un objet : son icône, à plat (vue des deux côtés)
-            model.transform.localScale = Vector3.one * FlatScale;
-            model.AddComponent<MeshFilter>().sharedMesh = FlatMesh();
-            meshRenderer.sharedMaterial = world.FlatItemMaterial;
-
-            var block = new MaterialPropertyBlock();
-            block.SetTexture("_BaseMap", ItemIcons.Get(stack.type));
-            meshRenderer.SetPropertyBlock(block);
-        }
-    }
-
-    // Carré de 1 x 1 centré, avec une face de chaque côté. Couleurs : pleine lumière du ciel, sans occlusion.
-    static Mesh FlatMesh()
-    {
-        if (flatMesh != null) return flatMesh;
-
-        var color = new Color32(0, 255, 255, 0);
-        flatMesh = new Mesh { name = "Flat item" };
-        flatMesh.vertices = new[]
-        {
-            new Vector3(-0.5f, -0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(0.5f, -0.5f, 0f),
-            new Vector3(0.5f, -0.5f, 0f), new Vector3(0.5f, 0.5f, 0f), new Vector3(-0.5f, 0.5f, 0f), new Vector3(-0.5f, -0.5f, 0f),
-        };
-        flatMesh.normals = new[]
-        {
-            Vector3.back, Vector3.back, Vector3.back, Vector3.back,
-            Vector3.forward, Vector3.forward, Vector3.forward, Vector3.forward,
-        };
-        flatMesh.uv = new[]
-        {
-            new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(1f, 0f),
-            new Vector2(1f, 0f), new Vector2(1f, 1f), new Vector2(0f, 1f), new Vector2(0f, 0f),
-        };
-        flatMesh.colors32 = new[] { color, color, color, color, color, color, color, color };
-        flatMesh.triangles = new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7 };
-        flatMesh.RecalculateBounds();
-        return flatMesh;
+        // Un bloc : son vrai mesh, en petit. Un objet (outil, lingot...) : son icône extrudée en 3D, un pixel = 1/16 de
+        // sa largeur d'épaisseur. Le modèle est centré sur le pivot (voir ItemModel : il sert aussi à l'objet tenu en main).
+        ItemModel.Create(pivot, world, stack, stack.IsBlock ? ModelScale : FlatScale);
     }
 
     void Update()

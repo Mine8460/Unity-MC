@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: Anvil Rotated
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 11
+  displayName: Anvil Rotated
+  shape: 2
+  side:
+    albedo: {fileID: 2800000, guid: 901af13d09a7e804bac044e4800c74f8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  top:
+    albedo: {fileID: 2800000, guid: 901af13d09a7e804bac044e4800c74f8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  bottom:
+    albedo: {fileID: 2800000, guid: 901af13d09a7e804bac044e4800c74f8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 4900000, guid: 84583a11b9f1ad54a9ca07e4466bca6b, type: 3}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  opaque: 0
+  collidable: 1
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 0
+  gravity: 1
+  support: 0
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 0
+  breakTime: 6
+  tool: 1
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 0}
+  dropItem: 0
+  dropCount: 0
+  dropCountRandom: 0

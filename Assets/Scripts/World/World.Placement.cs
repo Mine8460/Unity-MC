@@ -18,13 +18,20 @@ public partial class World
     {
         // Viser un bloc remplaçable (herbe haute) : le nouveau bloc se pose À SA PLACE, comme dans Minecraft.
         // Sans ça, une herbe devant le sol détournerait la pose.
-        bool replaceHit = BlockDatabase.Get(GetBlock(hitBlock.x, hitBlock.y, hitBlock.z)).replaceable;
+        // Clic droit sur un levier, un bouton ou un répéteur : on l'utilise, on ne pose rien (Maj : on pose un bloc contre lui).
+        // Retourne false : aucun objet n'est consommé.
+        bool sneaking = Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift);
+        if (!sneaking && TryInteract(hitBlock)) return false;
 
-        if (item == BlockType.Torch && ! replaceHit)
+        bool replaceHit = BlockDatabase.Get(GetBlock(hitBlock.x, hitBlock.y, hitBlock.z)).replaceable;
+        if (item == BlockType.Torch && !replaceHit)
         {
             if (normal.y < 0) return false;
             if (normal.y == 0) item = WallTorchFor(normal);
         }
+        // Redstone : fil, répéteur, et composants qui se fixent au sol ou à un mur
+        if (TryPlaceRedstone(hitBlock, normal, hitPoint, replaceHit, item, out bool redstonePlaced))
+            return redstonePlaced;
 
         if (IsSlabItem(item, out BlockType top, out BlockType full))
             return TryPlaceSlab(hitBlock, normal, hitPoint, replaceHit, item, top, full);
@@ -85,11 +92,50 @@ public partial class World
         return PlaceAt(p, placed, hitBlock, normal, hitPoint);
     }
 
+    // Pose des composants de redstone. Retourne true si l'objet en est un (alors `placed` dit si la pose a réussi).
+    //   - la poussière se pose sur un bloc plein ; le répéteur aussi, tourné dans le sens où le joueur regarde ;
+    //   - la torche, le levier et le bouton se posent au sol ou contre un mur selon la face visée (jamais au plafond).
+    bool TryPlaceRedstone(Vector3Int hitBlock, Vector3Int normal, Vector3 hitPoint, bool replaceHit, BlockType item, out bool placed)
+    {
+        placed = false;
+        int id = (int)item;
+        BlockType type;
+        byte state = 0;
+
+        if (id == Redstone.Dust)
+        {
+            type = item;
+        }
+        else if (id == Redstone.Repeater)
+        {
+            type = item;
+            int facing = player != null ? Redstone.DirFromYaw(player.eulerAngles.y) : 0; // la sortie regarde loin du joueur
+            state = Redstone.RepeaterState(facing, 0, false);
+        }
+        else if (id == Redstone.TorchLit || id == Redstone.LeverOff || id == Redstone.ButtonOff)
+        {
+            int orient = Redstone.OrientFromNormal(replaceHit ? Vector3Int.up : normal);
+            if (orient < 0) return true; // pas au plafond
+
+            if (id == Redstone.TorchLit) type = Redstone.Torch(true, orient);
+            else if (id == Redstone.LeverOff) type = Redstone.Lever(false, orient);
+            else type = Redstone.Button(false, orient);
+        }
+        else
+        {
+            return false;
+        }
+
+        Vector3Int p = replaceHit ? hitBlock : hitBlock + normal;
+        placed = PlaceAt(p, type, hitBlock, normal, hitPoint, state);
+        return true;
+    }
+
     // Pose un bloc dans une case, et explique dans la Console pourquoi si c'est refusé
-    bool PlaceAt(Vector3Int p, BlockType type, Vector3Int hitBlock, Vector3Int normal, Vector3 hitPoint)
+    bool PlaceAt(Vector3Int p, BlockType type, Vector3Int hitBlock, Vector3Int normal, Vector3 hitPoint, byte state = 0)
     {
         if (CanPlace(p.x, p.y, p.z, type))
-            return SetBlock(p.x, p.y, p.z, type);
+            return SetBlockAndState(p.x, p.y, p.z, type, state, false);
 
         if (logPlacementFailures)
         {
