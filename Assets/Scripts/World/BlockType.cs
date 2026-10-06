@@ -154,7 +154,7 @@ public static class BlockDatabase
     static readonly Box[] FullBox = { new Box(Vector3.zero, Vector3.one) };
 
     // Zone visée pour une plante en croix (un peu plus étroite que le bloc)
-    static readonly Box[] PlantBox = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.9f, 1f, 0.9f)) };
+    static readonly Box[] PlantBox = { new Box(new Vector3(0.1f, 0f, 0.1f), new Vector3(0.7f, 0.6f, 0.7f)) };
 
     // Noms de tuiles : sert à retrouver la bonne tuile d'après le nom de la texture d'un modèle Blockbench
     // ("block/anvil" -> "anvil"). Une texture inconnue utilise la tuile par défaut donnée à FromBlockbench.
@@ -171,9 +171,10 @@ public static class BlockDatabase
     }
 
     // Une torche murale : même lumière que la torche, accrochée à son mur, et elle lâche une torche normale
-    static void WallTorch(BlockType type, Element stick, Vector3Int wallDirection)
+    static void WallTorch(BlockType type, string path, Vector3Int wallDirection)
     {
-        BlockInfo info = WithLight(Model(new[] { stick }, collidable: false, cullSameType: false), LightMode.FullBright);
+        BlockInfo info = WithLight(FromBlockbench(path, 11), LightMode.FullBright);
+        
         info.emission = 14;
         info.support = SupportRule.SolidBehind;
         info.attachDir = wallDirection;
@@ -184,6 +185,7 @@ public static class BlockDatabase
 
     static BlockDatabase()
     {
+
         // AJOUTER UN BLOC = une entrée dans l'enum + une ligne ici (+ sa tuile dans l'atlas)
         infos[(int)BlockType.Air]   = new BlockInfo { hasMesh = false };
         infos[(int)BlockType.Grass] = Solid(top: 0, bottom: 2, side: 1);
@@ -230,10 +232,11 @@ public static class BlockDatabase
             new[] { E(7, 0, 7, 9, 10, 9, top: 11, bottom: 11, side: 11) },
             collidable: false, cullSameType: false), LightMode.FullBright);
 
-        WallTorch(BlockType.WallTorchNorth, E(7, 3, 14, 9, 13, 16, top: 11, bottom: 11, side: 11), new Vector3Int(0, 0, 1));
-        WallTorch(BlockType.WallTorchSouth, E(7, 3, 0, 9, 13, 2, top: 11, bottom: 11, side: 11), new Vector3Int(0, 0, -1));
-        WallTorch(BlockType.WallTorchEast, E(14, 3, 7, 16, 13, 9, top: 11, bottom: 11, side: 11), new Vector3Int(1, 0, 0));
-        WallTorch(BlockType.WallTorchWest, E(0, 3, 7, 2, 13, 9, top: 11, bottom: 11, side: 11), new Vector3Int(-1, 0, 0));
+
+        WallTorch(BlockType.WallTorchNorth, "Models/WallTorchNorth", new Vector3Int(0, 0, 1));
+        WallTorch(BlockType.WallTorchSouth, "Models/WallTorchSouth", new Vector3Int(0, 0, -1));
+        WallTorch(BlockType.WallTorchEast, "Models/WallTorchEast", new Vector3Int(1, 0, 0));
+        WallTorch(BlockType.WallTorchWest, "Models/WallTorchWest", new Vector3Int(-1, 0, 0));
 
         // (tuiles de test : adapte-les à ton atlas)
         infos[(int)BlockType.Sand]    = Solid(top: 12, bottom: 12, side: 12);
@@ -400,6 +403,9 @@ public static class BlockDatabase
                 throw new System.IO.FileNotFoundException($"Assets/Resources/{resourcePath}.json introuvable");
 
             BlockbenchModel.Bake(asset.text, TileByName, defaultTile, out ModelQuad[] quads, out Box[] boxes);
+
+            if (boxes.Length == 0)
+                Debug.LogError("Box lenght = 0");
 
             Box[] collisionBoxes;
             switch (collision)

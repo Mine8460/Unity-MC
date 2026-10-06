@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 // Inventaire du joueur : 9 cases de barre d'accès + 27 cases d'inventaire, piles de 64 maximum.
 // À mettre sur le GameObject du joueur.
@@ -19,8 +20,8 @@ public class Inventory : MonoBehaviour
     [SerializeField] Transform cameraTransform;
 
     [Header("Touches")]
-    [SerializeField] KeyCode toggleKey = KeyCode.E;
-    [SerializeField] KeyCode dropKey = KeyCode.G;   // Ctrl + touche : toute la pile
+    InputAction dropAction;
+    InputAction inventoryAction;
 
     [Header("Départ")]
     [Tooltip("Donne des objets de test au premier lancement (sans sauvegarde)")]
@@ -65,6 +66,14 @@ public class Inventory : MonoBehaviour
         if (cameraTransform == null && Camera.main != null) cameraTransform = Camera.main.transform;
 
         if (!Load()) GiveStartItems();
+    }
+
+    private void Start()
+    {
+        inventoryAction = InputSystem.actions.FindAction("Inventory");
+        inventoryAction.performed += OnOpenInventory;
+        dropAction = InputSystem.actions.FindAction("Drop");
+        dropAction.performed += OnDropItem;
     }
 
     static T FindFirst<T>() where T : UnityEngine.Object
@@ -115,12 +124,7 @@ public class Inventory : MonoBehaviour
 
     void Update()
     {
-        if (Input.GetKeyDown(toggleKey))
-        {
-            if (!IsOpen) CraftingSize = 2; // E : l'inventaire, avec la grille 2 x 2
-            SetOpen(!IsOpen);
-        }
-        else if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
+        if (IsOpen && Input.GetKeyDown(KeyCode.Escape)) SetOpen(false);
 
         // Sauvegarde automatique toutes les 30 secondes s'il y a eu un changement
         saveTimer += Time.unscaledDeltaTime;
@@ -142,8 +146,23 @@ public class Inventory : MonoBehaviour
         float wheel = Input.mouseScrollDelta.y;
         if (wheel > 0f) Select(selected - 1);
         else if (wheel < 0f) Select(selected + 1);
+    }
 
-        if (Input.GetKeyDown(dropKey)) DropSelected(Input.GetKey(KeyCode.LeftControl));
+    void OnDropItem(InputAction.CallbackContext context)
+    {
+        if (context.performed)
+        {
+            DropSelected(Input.GetKey(KeyCode.LeftControl));
+        }
+    }
+
+    void OnOpenInventory(InputAction.CallbackContext context)
+    {
+        if (context.performed)
+        {
+            if (!IsOpen) CraftingSize = 2; // E : l'inventaire, avec la grille 2 x 2
+            SetOpen(!IsOpen);
+        }
     }
 
     void OnApplicationQuit()

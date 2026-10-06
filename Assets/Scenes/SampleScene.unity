@@ -816,11 +816,11 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 981828837}
+  - component: {fileID: 981828845}
   - component: {fileID: 981828840}
   - component: {fileID: 981828842}
   - component: {fileID: 981828841}
   - component: {fileID: 981828843}
-  - component: {fileID: 981828845}
   - component: {fileID: 981828844}
   m_Layer: 0
   m_Name: Player
@@ -838,7 +838,7 @@ Transform:
   m_GameObject: {fileID: 981828836}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 10, y: 100, z: 10}
+  m_LocalPosition: {x: 0, y: 100, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -876,8 +876,6 @@ MonoBehaviour:
   flyBoostSpeed: 30
   flyVerticalSpeed: 8
   flyAcceleration: 60
-  flyDownKey: 304
-  flyBoostKey: 306
   noClip: 0
   noClipKey: 110
   swimSpeedFactor: 0.6
@@ -888,12 +886,6 @@ MonoBehaviour:
   waterPushAcceleration: 6
   underwaterTint: {r: 0.1, g: 0.25, b: 0.6, a: 0.45}
   mouseSensitivity: 2
-  forwardKey: 122
-  backKey: 115
-  leftKey: 113
-  rightKey: 100
-  jumpKey: 32
-  sprintKey: 306
 --- !u!114 &981828841
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -925,10 +917,6 @@ MonoBehaviour:
     m_ActionName: 'Player/Forward[/Keyboard/s,/Keyboard/w]'
   - m_PersistentCalls:
       m_Calls: []
-    m_ActionId: caa1868a-08d4-4a3c-89d3-551a98a231e3
-    m_ActionName: 'Player/Right[/Keyboard/a,/Keyboard/d]'
-  - m_PersistentCalls:
-      m_Calls: []
     m_ActionId: d725c39a-2e58-431b-a806-2cde6744bf11
     m_ActionName: 'Player/Jump[/Keyboard/space]'
   - m_PersistentCalls:
@@ -936,19 +924,7 @@ MonoBehaviour:
     m_ActionId: 4703449e-72e1-4e28-9404-18214922d69e
     m_ActionName: 'Player/Run[/Keyboard/shift]'
   - m_PersistentCalls:
-      m_Calls:
-      - m_Target: {fileID: 981828842}
-        m_TargetAssemblyTypeName: PlayerInteractions, Assembly-CSharp
-        m_MethodName: OnBreak
-        m_Mode: 0
-        m_Arguments:
-          m_ObjectArgument: {fileID: 0}
-          m_ObjectArgumentAssemblyTypeName: UnityEngine.Object, UnityEngine
-          m_IntArgument: 0
-          m_FloatArgument: 0
-          m_StringArgument: 
-          m_BoolArgument: 0
-        m_CallState: 2
+      m_Calls: []
     m_ActionId: e5ba3dd9-97ed-47a2-a610-334b69f65273
     m_ActionName: 'Player/Break[/Mouse/leftButton]'
   - m_PersistentCalls:
@@ -983,6 +959,14 @@ MonoBehaviour:
         m_CallState: 2
     m_ActionId: c0663e05-a39e-4168-b654-58f26dab7143
     m_ActionName: 'Player/CopyBlock[/Mouse/middleButton]'
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 965519f3-6167-4789-aef5-15b6a0b512a0
+    m_ActionName: 'Player/Drop[/Keyboard/q]'
+  - m_PersistentCalls:
+      m_Calls: []
+    m_ActionId: 96631536-8c78-40f9-b223-3b7923e76167
+    m_ActionName: 'Player/Sneak[/Keyboard/shift]'
   m_NeverAutoSwitchControlSchemes: 0
   m_DefaultControlScheme: 
   m_DefaultActionMap: Player
@@ -1018,8 +1002,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Inventory
   world: {fileID: 628363072}
   cameraTransform: {fileID: 239091772}
-  toggleKey: 101
-  dropKey: 97
   giveTestItems: 1
   startItems: []
   saveToDisk: 0

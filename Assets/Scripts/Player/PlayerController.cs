@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 // Joueur "à la Minecraft" : hitbox AABB qui ne tourne jamais, collision calculée
 // directement contre les boîtes de collision des blocs (aucun Rigidbody, aucune friction).
@@ -38,9 +39,6 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Plus haut = s'arrête et repart plus sèchement")]
     [SerializeField] float flyAcceleration = 60f;
     [Tooltip("En vol (saut = monter)")]
-    [SerializeField] KeyCode flyDownKey = KeyCode.LeftShift;
-    [SerializeField] KeyCode flyBoostKey = KeyCode.LeftControl;
-    [Tooltip("Mode fantôme : traverser les blocs en vol (touche ci-dessous pour basculer en jeu)")]
     [SerializeField] bool noClip = false;
     [SerializeField] KeyCode noClipKey = KeyCode.N;
 
@@ -61,14 +59,6 @@ public class PlayerController : MonoBehaviour
 
     [Header("Souris")]
     [SerializeField] float mouseSensitivity = 2f;
-
-    [Header("Touches (AZERTY par défaut)")]
-    [SerializeField] KeyCode forwardKey = KeyCode.Z;
-    [SerializeField] KeyCode backKey = KeyCode.S;
-    [SerializeField] KeyCode leftKey = KeyCode.Q;
-    [SerializeField] KeyCode rightKey = KeyCode.D;
-    [SerializeField] KeyCode jumpKey = KeyCode.Space;
-    [SerializeField] KeyCode sprintKey = KeyCode.LeftShift;
 
     // Marge minuscule : la hitbox est testée légèrement rétrécie, ce qui évite
     // de "toucher" les blocs voisins à cause des erreurs d'arrondi.
@@ -101,6 +91,11 @@ public class PlayerController : MonoBehaviour
 
     public bool IsFlying => flying;
 
+    InputAction moveAction;
+    InputAction runAction;
+    InputAction sneakAction;
+    InputAction jumpAction;
+
     void Awake()
     {
         spawnPoint = transform.position;
@@ -114,6 +109,16 @@ public class PlayerController : MonoBehaviour
         }
 
         LockCursor(true);
+    }
+
+    private void Start()
+    {
+        moveAction = InputSystem.actions.FindAction("Move");
+        runAction = InputSystem.actions.FindAction("Run");
+        sneakAction = InputSystem.actions.FindAction("Sneak");
+        jumpAction = InputSystem.actions.FindAction("Jump");
+
+        jumpAction.performed += OnJump;
     }
 
     void Update()
@@ -130,29 +135,36 @@ public class PlayerController : MonoBehaviour
             pitch = Mathf.Clamp(pitch, -90f, 90f);
             cameraTransform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
 
-            if (Input.GetKeyDown(jumpKey))
-            {
-                jumpBuffer = JumpBufferTime;
+            //if (Input.GetKeyDown(jumpKey))
+            //{
 
-                // Double-appui sur saut : active / coupe le vol
-                if (doubleTapJumpToFly && Time.time - lastJumpPress < DoubleTapTime)
-                {
-                    SetFlying(!flying);
-                    lastJumpPress = -10f;
-                    jumpBuffer = 0f;
-                }
-                else
-                {
-                    lastJumpPress = Time.time;
-                }
-            }
 
-            if (Input.GetKeyDown(flyToggleKey)) SetFlying(!flying);
-            if (flying && Input.GetKeyDown(noClipKey)) noClip = !noClip;
+            //    if (Input.GetKeyDown(flyToggleKey)) SetFlying(!flying);
+            //    if (flying && Input.GetKeyDown(noClipKey)) noClip = !noClip;
+            //}
+
+            Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
+            eyeInWater = IsEyeUnderwater();
         }
+    }
+    void OnJump(InputAction.CallbackContext context)
+    {
+        if (context.performed)
+        {
+            jumpBuffer = JumpBufferTime;
 
-        Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
-        eyeInWater = IsEyeUnderwater();
+            // Double-appui sur saut : active / coupe le vol
+            if (doubleTapJumpToFly && Time.time - lastJumpPress < DoubleTapTime)
+            {
+                SetFlying(!flying);
+                lastJumpPress = -10f;
+                jumpBuffer = 0f;
+            }
+            else
+            {
+                lastJumpPress = Time.time;
+            }
+        }
     }
 
     // Pose le joueur sur le plus haut bloc solide sous sa hitbox (les 4 coins : il ne doit chevaucher aucun bloc).
@@ -204,13 +216,11 @@ public class PlayerController : MonoBehaviour
 
         // --- Vitesse voulue ---
         Vector3 input = Vector3.zero;
+        Vector2 move = moveAction.ReadValue<Vector2>();
         if (active)
         {
-            input = new Vector3(
-                (Input.GetKey(rightKey) ? 1f : 0f) - (Input.GetKey(leftKey) ? 1f : 0f),
-                0f,
-                (Input.GetKey(forwardKey) ? 1f : 0f) - (Input.GetKey(backKey) ? 1f : 0f));
-            input = Vector3.ClampMagnitude(input, 1f);
+            input.x = move.x;
+            input.z = move.y;
         }
 
         inWater = IsInWater(transform.position);
@@ -220,7 +230,8 @@ public class PlayerController : MonoBehaviour
         waterPush = Vector3.MoveTowards(waterPush, pushTarget, waterPushAcceleration * dt);
 
         Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * input;
-        float speed = Input.GetKey(sprintKey) ? sprintSpeed : walkSpeed;
+        bool sprint = runAction.ReadValue<float>() > 0f;
+        float speed = sprint ? sprintSpeed : walkSpeed;
         if (inWater) speed *= swimSpeedFactor;
         velocity.x = dir.x * speed + waterPush.x;
         velocity.z = dir.z * speed + waterPush.z;
@@ -231,10 +242,10 @@ public class PlayerController : MonoBehaviour
         wasOnGround = onGround;
 
         // Saut : appui mémorisé un court instant, ou touche maintenue (comme Minecraft)
-        bool wantsJump = active && (jumpBuffer > 0f || Input.GetKey(jumpKey));
+        bool wantsJump = active && (jumpBuffer > 0f || jumpAction.ReadValue<float>() > 0f);
         jumpBuffer = Mathf.Max(jumpBuffer - dt, 0f);
 
-        bool swimUp = active && Input.GetKey(jumpKey);
+        bool swimUp = active && jumpAction.ReadValue<float>() > 0f;
 
         if (inWater)
         {
@@ -298,15 +309,13 @@ public class PlayerController : MonoBehaviour
         float vertical = 0f;
         bool boost = false;
 
+        Vector2 move = moveAction.ReadValue<Vector2>();
         if (active)
         {
-            input = new Vector3(
-                (Input.GetKey(rightKey) ? 1f : 0f) - (Input.GetKey(leftKey) ? 1f : 0f),
-                0f,
-                (Input.GetKey(forwardKey) ? 1f : 0f) - (Input.GetKey(backKey) ? 1f : 0f));
-            input = Vector3.ClampMagnitude(input, 1f);
-            vertical = (Input.GetKey(jumpKey) ? 1f : 0f) - (Input.GetKey(flyDownKey) ? 1f : 0f);
-            boost = Input.GetKey(flyBoostKey);
+            input.x = move.x;
+            input.z = move.y;
+            vertical = (jumpAction.ReadValue<float>() > 0f ? 1f : 0f) - (sneakAction.ReadValue<bool>() ? 1f : 0f);
+            boost = runAction.ReadValue<float>() > 0f;
         }
 
         // Vitesse voulue (le regard ne fait pas monter ou descendre : seules les touches le font, comme Minecraft)
@@ -465,36 +474,36 @@ public class PlayerController : MonoBehaviour
         snap = dir > 0f ? float.PositiveInfinity : float.NegativeInfinity;
 
         for (int x = x0; x <= x1; x++)
-        for (int y = y0; y <= y1; y++)
-        for (int z = z0; z <= z1; z++)
-        {
-            Box[] boxes = BlockDatabase.Get(world.GetBlock(x, y, z)).collisionBoxes;
-            if (boxes == null) continue;
+            for (int y = y0; y <= y1; y++)
+                for (int z = z0; z <= z1; z++)
+                {
+                    Box[] boxes = BlockDatabase.Get(world.GetBlock(x, y, z)).collisionBoxes;
+                    if (boxes == null) continue;
 
-            var cell = new Vector3(x, y, z);
-            for (int i = 0; i < boxes.Length; i++)
-            {
-                Vector3 bmin = cell + boxes[i].min;
-                Vector3 bmax = cell + boxes[i].max;
+                    var cell = new Vector3(x, y, z);
+                    for (int i = 0; i < boxes.Length; i++)
+                    {
+                        Vector3 bmin = cell + boxes[i].min;
+                        Vector3 bmax = cell + boxes[i].max;
 
-                // Chevauchement (la marge Skin ignore les simples contacts)
-                if (min.x + Skin >= bmax.x || max.x - Skin <= bmin.x) continue;
-                if (min.y + Skin >= bmax.y || max.y - Skin <= bmin.y) continue;
-                if (min.z + Skin >= bmax.z || max.z - Skin <= bmin.z) continue;
+                        // Chevauchement (la marge Skin ignore les simples contacts)
+                        if (min.x + Skin >= bmax.x || max.x - Skin <= bmin.x) continue;
+                        if (min.y + Skin >= bmax.y || max.y - Skin <= bmin.y) continue;
+                        if (min.z + Skin >= bmax.z || max.z - Skin <= bmin.z) continue;
 
-                hit = true;
-                if (axis < 0) return true;
+                        hit = true;
+                        if (axis < 0) return true;
 
-                // Position qui colle la hitbox contre cette boîte ; on garde la plus restrictive
-                float candidate;
-                if (dir > 0f)
-                    candidate = bmin[axis] - (axis == 1 ? height : hw);
-                else
-                    candidate = bmax[axis] + (axis == 1 ? 0f : hw);
+                        // Position qui colle la hitbox contre cette boîte ; on garde la plus restrictive
+                        float candidate;
+                        if (dir > 0f)
+                            candidate = bmin[axis] - (axis == 1 ? height : hw);
+                        else
+                            candidate = bmax[axis] + (axis == 1 ? 0f : hw);
 
-                snap = dir > 0f ? Mathf.Min(snap, candidate) : Mathf.Max(snap, candidate);
-            }
-        }
+                        snap = dir > 0f ? Mathf.Min(snap, candidate) : Mathf.Max(snap, candidate);
+                    }
+                }
 
         if (!hit) snap = 0f;
         return hit;

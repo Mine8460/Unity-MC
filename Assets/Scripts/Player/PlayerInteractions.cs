@@ -24,6 +24,27 @@ public class PlayerInteractions : MonoBehaviour
             outline.Hide();
     }
 
+    public void OnPlace(InputAction.CallbackContext context)
+    {
+        if (context.performed && blockToPlace != BlockType.Bedrock && !Inventory.IsOpen)
+        {
+            Inventory inventory = GetComponent<Inventory>();
+            World world = GetComponent<PlayerController>().world;
+            RaycastHit hit;
+            if (Physics.Raycast(camera.position, camera.forward, out hit, interactionRange))
+            {
+                Vector3 point = hit.point + hit.normal * 0.02f; // Move the point slightly inside the block
+                BlockType type = GetComponent<PlayerController>().world.GetBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z));
+
+                Vector3Int hitBlock = Vector3Int.FloorToInt(hit.point - hit.normal * 0.01f);
+                Vector3Int normal = Vector3Int.RoundToInt(hit.normal);
+                if (inventory.TryGetSelected(out BlockType selected) &&
+                    world.TryPlaceAgainst(hitBlock, normal, hit.point, selected))
+                    inventory.ConsumeSelected();
+            }
+        }
+    }
+
     public void OnCopyBlock(InputAction.CallbackContext context)
     {
         if (context.performed)
