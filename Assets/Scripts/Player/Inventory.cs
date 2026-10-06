@@ -95,6 +95,11 @@ public class Inventory : MonoBehaviour
         Add(BlockType.Leaves, 64);
         Add(BlockType.TallGrass, 64);
 
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
+        Add(ItemType.GoldenAxe, 1);
+
     }
 
     void Update()
