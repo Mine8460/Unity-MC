@@ -690,7 +690,7 @@ MonoBehaviour:
   waterMaterial: {fileID: 2100000, guid: cc806ef781deaa74bbdd7d045f35f065, type: 2}
   smoothLighting: 1
   player: {fileID: 981828837}
-  renderDistance: 24
+  renderDistance: 6
   workerThreads: 0
   maxGenerationsInFlight: 6
   maxMeshJobsInFlight: 6
@@ -707,7 +707,7 @@ MonoBehaviour:
   caveDensity: 0.5
   treeDensity: 0.5
   showcaseBlocks: 1
-  saveToDisk: 1
+  saveToDisk: 0
   saveFileName: world.save
   autosaveInterval: 60
 --- !u!4 &628363073
@@ -1021,7 +1021,7 @@ MonoBehaviour:
   dropKey: 103
   giveTestItems: 1
   startItems: []
-  saveToDisk: 1
+  saveToDisk: 0
   saveFileName: inventory.json
 --- !u!114 &981828844
 MonoBehaviour:
@@ -1032,13 +1032,14 @@ MonoBehaviour:
   m_GameObject: {fileID: 981828836}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 9dcccfa6deb2c0544b2935e071efe76f, type: 3}
+  m_Script: {fileID: 11500000, guid: 58254dcb38ed9c042bd36b645c815fca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BlockBreaker
   world: {fileID: 628363072}
   cam: {fileID: 239091775}
   reach: 5
   hitLayers:
+    serializedVersion: 2
     m_Bits: 4294967295
   breakCooldown: 0.25
   crackMaterial: {fileID: 2100000, guid: 88eda581a2218634eb07640a8f7c2401, type: 2}

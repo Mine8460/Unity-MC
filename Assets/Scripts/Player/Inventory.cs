@@ -62,7 +62,7 @@ public class Inventory : MonoBehaviour
     static T FindFirst<T>() where T : UnityEngine.Object
     {
 #if UNITY_2023_1_OR_NEWER
-        return UnityEngine.Object.FindFirstObjectByType<T>();
+        return UnityEngine.Object.FindAnyObjectByType<T>();
 #else
         return UnityEngine.Object.FindObjectOfType<T>();
 #endif
@@ -78,31 +78,23 @@ public class Inventory : MonoBehaviour
             return;
         }
 
+        // Outils, en attendant l'artisanat
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.DiamondAxe, 1);
+        Add(ItemType.DiamondShovel, 1);
+
         Add(BlockType.Stone, 64);
         Add(BlockType.Dirt, 64);
-        Add(BlockType.Log, 32);
-        Add(BlockType.Glass, 32);
-        Add(BlockType.Torch, 32);
-        Add(BlockType.StoneSlab, 32);
-        Add(BlockType.Anvil, 8);
-        Add(BlockType.Sand, 16);
+        Add(BlockType.Log, 64);
+        Add(BlockType.Glass, 64);
+        Add(BlockType.Torch, 64);
+        Add(BlockType.StoneSlab, 64);
+        Add(BlockType.Anvil, 64);
+        Add(BlockType.Sand, 64);
+        Add(BlockType.Water, 64);
+        Add(BlockType.Leaves, 64);
+        Add(BlockType.TallGrass, 64);
 
-        // Outils, en attendant l'artisanat
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
-        Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.IronAxe, 1);
-        Add(ItemType.IronShovel, 1);
-        Add(ItemType.Stick, 16);
-
-        // Outils pour tester (en attendant l'artisanat)
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
-        Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.StoneAxe, 1);
-        Add(ItemType.StoneShovel, 1);
     }
 
     void Update()
