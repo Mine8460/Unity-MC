@@ -21,6 +21,8 @@ public partial class World : MonoBehaviour
     [SerializeField] Material chunkMaterial;
     [Tooltip("Matériau de l'eau (shader Voxel/Water, même atlas que les blocs)")]
     [SerializeField] Material waterMaterial;
+    [Tooltip("Smooth lighting façon Minecraft : lumière lissée et ombre douce dans les coins (pris en compte au chargement)")]
+    [SerializeField] bool smoothLighting = true;
     [SerializeField] Transform player;
 
     [Header("Chargement des chunks")]
@@ -51,6 +53,8 @@ public partial class World : MonoBehaviour
     [Tooltip("Taille des reliefs : 2 = deux fois plus étalés, 0,5 = deux fois plus serrés")]
     [SerializeField, Range(0.25f, 4f)] float featureScale = 1f;
     [SerializeField] bool caves = true;
+    [Tooltip("Filons de minerais (charbon, fer, or, diamant) dans la pierre")]
+    [SerializeField] bool ores = true;
     [SerializeField, Range(0f, 1f)] float caveDensity = 0.5f;
     [Tooltip("0 = aucun arbre")]
     [SerializeField, Range(0f, 1f)] float treeDensity = 0.5f;
@@ -120,6 +124,7 @@ public partial class World : MonoBehaviour
         // Les tables de BlockDatabase sont remplies par son constructeur statique, qui lit des ressources Unity
         // (modèles Blockbench). Il DOIT s'exécuter ici, sur le thread principal, avant tout thread secondaire.
         BlockDatabase.Get(BlockType.Air);
+        ChunkMesher.SmoothLighting = smoothLighting; // avant le démarrage des threads de maillage
 
         if (player == null && Camera.main != null)
             player = Camera.main.transform;
@@ -235,6 +240,7 @@ public partial class World : MonoBehaviour
             mountainHeight = mountainHeight,
             scale = featureScale,
             caves = caves,
+            ores = ores,
             caveDensity = caveDensity,
             treeDensity = treeDensity,
             showcase = showcaseBlocks,

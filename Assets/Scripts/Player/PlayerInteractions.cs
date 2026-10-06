@@ -23,19 +23,6 @@ public class PlayerInteractions : MonoBehaviour
         else
             outline.Hide();
     }
-
-    public void OnBreak(InputAction.CallbackContext context)
-    {
-        if (context.performed && !Inventory.IsOpen)
-        {
-            RaycastHit hit;
-            if (Physics.Raycast(camera.position, camera.forward, out hit, interactionRange))
-            {
-                Vector3 point = hit.point - hit.normal * 0.02f; // Move the point slightly inside the block
-                GetComponent<PlayerController>().world.BreakBlock(Mathf.FloorToInt(point.x), Mathf.FloorToInt(point.y), Mathf.FloorToInt(point.z));
-            }
-        }
-    }
     public void OnPlace(InputAction.CallbackContext context)
     {
         if (context.performed && blockToPlace != BlockType.Bedrock && !Inventory.IsOpen)

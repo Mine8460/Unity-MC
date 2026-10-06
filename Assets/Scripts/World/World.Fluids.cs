@@ -113,6 +113,55 @@ public partial class World
     }
 
     // ------------------------------------------------------------------
+    // Courant (pour pousser le joueur et les objets)
+    // ------------------------------------------------------------------
+
+    // Hauteur de l'eau dans sa case, comme Minecraft : 8/9 pour une source ou une chute, puis 1/9 de moins par
+    // niveau. 0 = pas d'eau.
+    float FluidHeight(int x, int y, int z)
+    {
+        if (GetBlock(x, y, z) != BlockType.Water) return 0f;
+        byte state = GetState(x, y, z);
+        if (state == WaterState.Source || state == WaterState.Falling) return 8f / 9f;
+        return (8 - state) / 9f;
+    }
+
+    // Sens du courant dans la case (vecteur de longueur 1, ou zéro), calculé comme dans Minecraft : l'eau
+    // pousse vers les voisines plus basses, et fortement vers une case vide d'où elle va tomber.
+    // L'eau qui tombe pousse vers le bas. Un lac (que des sources au même niveau) ne pousse pas.
+    public Vector3 GetFlow(int x, int y, int z)
+    {
+        float own = FluidHeight(x, y, z);
+        if (own <= 0f) return Vector3.zero;
+
+        Vector3 flow = Vector3.zero;
+        foreach (Vector3Int d in HorizontalDirs)
+        {
+            int nx = x + d.x, nz = z + d.z;
+            float neighbor = FluidHeight(nx, y, nz);
+            float diff = 0f;
+
+            if (neighbor > 0f)
+            {
+                diff = own - neighbor;
+            }
+            else if (IsWaterHole(nx, y, nz))
+            {
+                // Case vide : si de l'eau est juste en dessous, c'est là que l'eau va tomber
+                float below = FluidHeight(nx, y - 1, nz);
+                if (below > 0f) diff = own - (below - 8f / 9f);
+            }
+
+            flow.x += d.x * diff;
+            flow.z += d.z * diff;
+        }
+
+        if (GetState(x, y, z) == WaterState.Falling) flow.y -= 1f;
+
+        return flow.sqrMagnitude > 1e-6f ? flow.normalized : Vector3.zero;
+    }
+
+    // ------------------------------------------------------------------
     // Règles
     // ------------------------------------------------------------------
 

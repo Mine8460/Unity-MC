@@ -20,16 +20,21 @@ public class InventoryUI : MonoBehaviour
         public GameObject frame;   // cadre blanc de la case sélectionnée
         public BlockIcon icon;
         public Text count;
+        public GameObject durability;      // barre d'usure d'un outil (cachée s'il est neuf)
+        public RectTransform durabilityFill;
+        public Image durabilityImage;
     }
 
     readonly SlotView[] hudSlots = new SlotView[Inventory.HotbarSize];
     readonly SlotView[] panelSlots = new SlotView[Inventory.Size];
 
     RectTransform canvasRect, hud, panel;
+    Canvas canvas;
+    float lastScaleFactor = -1f;
     SlotView heldView;
     Text tooltip;
     Font font;
-    [SerializeField] Texture atlas;
+    Texture atlas;
 
     void Start()
     {
@@ -80,7 +85,7 @@ public class InventoryUI : MonoBehaviour
         // par exemple), il ne s'adapte plus à l'écran et la barre d'accès apparaît au milieu.
         var go = new GameObject("InventoryCanvas");
 
-        var canvas = go.AddComponent<Canvas>();
+        canvas = go.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 50;
 
@@ -143,6 +148,7 @@ public class InventoryUI : MonoBehaviour
 
         heldView = new SlotView { rect = heldRect };
         heldView.icon = CreateIcon(heldRect, 4f);
+        CreateDurabilityBar(heldView, heldRect);
         heldView.count = CreateCount(heldRect);
 
         var tooltipRect = NewRect("Tooltip", canvasRect);
@@ -180,13 +186,41 @@ public class InventoryUI : MonoBehaviour
         background.color = new Color(0.14f, 0.14f, 0.14f, 0.92f);
         background.raycastTarget = false;
 
-        return new SlotView
+        var view = new SlotView
         {
             rect = root,
             frame = frameRect.gameObject,
             icon = CreateIcon(root, 6f),
             count = CreateCount(root),
         };
+        CreateDurabilityBar(view, root);
+        return view;
+    }
+
+    // Barre d'usure sous l'icône, comme Minecraft : un fond noir et une jauge du vert au rouge
+    static void CreateDurabilityBar(SlotView view, Transform parent)
+    {
+        var bar = NewRect("Durability", parent);
+        bar.anchorMin = new Vector2(0f, 0f);
+        bar.anchorMax = new Vector2(1f, 0f);
+        bar.offsetMin = new Vector2(7f, 5f);
+        bar.offsetMax = new Vector2(-7f, 8f);
+        var background = bar.gameObject.AddComponent<Image>();
+        background.color = Color.black;
+        background.raycastTarget = false;
+
+        var fill = NewRect("Fill", bar);
+        fill.anchorMin = Vector2.zero;
+        fill.anchorMax = Vector2.one;
+        fill.offsetMin = Vector2.zero;
+        fill.offsetMax = new Vector2(0f, -1f);
+        var fillImage = fill.gameObject.AddComponent<Image>();
+        fillImage.raycastTarget = false;
+
+        view.durability = bar.gameObject;
+        view.durabilityFill = fill;
+        view.durabilityImage = fillImage;
+        bar.gameObject.SetActive(false);
     }
 
     BlockIcon CreateIcon(Transform parent, float padding)
@@ -252,11 +286,34 @@ public class InventoryUI : MonoBehaviour
         heldView.rect.gameObject.SetActive(open && !inventory.HeldStack.IsEmpty);
     }
 
+    // Les textes sont générés à l'échelle de l'interface. Au lancement, le CanvasScaler ne l'a pas encore
+    // calculée : sans ceci, les nombres restaient flous jusqu'à leur prochaine modification. Même chose si
+    // la fenêtre change de taille. On les régénère donc dès que l'échelle change.
+    void LateUpdate()
+    {
+        if (canvas == null || Mathf.Approximately(canvas.scaleFactor, lastScaleFactor)) return;
+        lastScaleFactor = canvas.scaleFactor;
+
+        foreach (Text text in canvasRect.GetComponentsInChildren<Text>(true)) // y compris l'inventaire fermé
+            text.SetAllDirty();
+    }
+
     static void Fill(SlotView view, ItemStack stack, bool selected)
     {
-        view.icon.SetBlock(stack.IsEmpty ? BlockType.Air : stack.type);
+        view.icon.SetItem(stack.IsEmpty ? ItemType.None : stack.type);
         view.count.text = stack.count > 1 ? stack.count.ToString() : "";
         if (view.frame != null) view.frame.SetActive(selected);
+
+        // Usure : seulement pour un outil déjà abîmé
+        int durability = stack.IsEmpty ? 0 : ItemDatabase.Get(stack.type).durability;
+        bool worn = durability > 0 && stack.damage > 0;
+        view.durability.SetActive(worn);
+        if (worn)
+        {
+            float left = 1f - stack.damage / (float)durability;
+            view.durabilityFill.anchorMax = new Vector2(left, 1f);
+            view.durabilityImage.color = Color.Lerp(Color.red, Color.green, left);
+        }
     }
 
     void Update()
@@ -301,7 +358,10 @@ public class InventoryUI : MonoBehaviour
         tooltip.gameObject.SetActive(showTooltip);
         if (showTooltip)
         {
-            tooltip.text = Regex.Replace(hoveredStack.type.ToString(), "(?<!^)([A-Z])", " $1");
+            ItemInfo info = ItemDatabase.Get(hoveredStack.type);
+            tooltip.text = info.durability > 0
+                ? $"{info.name} ({info.durability - hoveredStack.damage}/{info.durability})"
+                : info.name;
             tooltip.rectTransform.anchoredPosition = local + new Vector2(16f, -16f);
         }
     }
@@ -310,10 +370,97 @@ public class InventoryUI : MonoBehaviour
 // Icône d'un bloc dans l'inventaire, choisie comme dans Minecraft :
 //   1. une image dessinée à la main, si elle existe : Assets/Resources/Icons/<NomDuBloc>.png (ex. Icons/Torch.png) ;
 //   2. sinon, pour une plante (forme en croix), sa texture à plat ;
-//   3. sinon, un rendu isométrique du VRAI mesh du bloc (cubes, dalle, enclume, modèles Blockbench...).
-// Aucun bloc n'a donc besoin d'icône pour être affiché : on en ajoute seulement quand on veut.
-public class BlockIcon : MaskableGraphic
+//   3. sinon, un rendu isométrique du VRAI mesh du bloc (cubes, dalle, enclume, modèles Blockbench...),
+//      dessiné une seule fois dans une petite texture, puis mis en cache.
+// L'affichage passe par RawImage, le composant standard d'Unity pour montrer une texture.
+[RequireComponent(typeof(RawImage))]
+public class BlockIcon : MonoBehaviour
 {
+    RawImage image;
+    World world;
+    Texture atlas;
+    ItemType item;
+    bool applied;
+
+    public bool raycastTarget
+    {
+        set => Image.raycastTarget = value;
+    }
+
+    RawImage Image => image != null ? image : (image = GetComponent<RawImage>());
+
+    public void Setup(World world, Texture atlas)
+    {
+        this.world = world;
+        this.atlas = atlas;
+        Apply();
+    }
+
+    public void SetBlock(BlockType block) => SetItem(ItemDatabase.FromBlock(block));
+
+    public void SetItem(ItemType newItem)
+    {
+        if (applied && item == newItem) return;
+        item = newItem;
+        Apply();
+    }
+
+    void Apply()
+    {
+        applied = true;
+        RawImage img = Image;
+
+        if (item == ItemType.None || world == null)
+        {
+            img.enabled = false;
+            return;
+        }
+
+        img.uvRect = new Rect(0f, 0f, 1f, 1f);
+
+        // Un objet qui n'est pas un bloc (outil, lingot...) : son image, ou son icône générée
+        if (!ItemDatabase.IsBlock(item))
+        {
+            img.texture = ItemIcons.Get(item);
+            img.enabled = true;
+            return;
+        }
+
+        BlockType type = ItemDatabase.ToBlock(item);
+
+        // 1) Image dessinée à la main
+        Texture2D custom = BlockIconCache.CustomIcon(type);
+        if (custom != null)
+        {
+            img.texture = custom;
+            img.enabled = true;
+            return;
+        }
+
+        // 2) Plante : sa tuile de l'atlas, à plat
+        BlockInfo info = BlockDatabase.Get(type);
+        if (info.shape == BlockShape.Cross && atlas != null)
+        {
+            Vector2 min = BlockDatabase.TileUV(info.tileSide, 0f, 0f);
+            Vector2 max = BlockDatabase.TileUV(info.tileSide, 1f, 1f);
+            img.texture = atlas;
+            img.uvRect = new Rect(min, max - min);
+            img.enabled = true;
+            return;
+        }
+
+        // 3) Rendu isométrique
+        Texture2D iso = BlockIconCache.IsoIcon(type, world, atlas);
+        img.texture = iso;
+        img.enabled = iso != null;
+    }
+}
+
+// Création et cache des icônes
+public static class BlockIconCache
+{
+    const int IconSize = 64; // pixels de l'icône isométrique
+
     sealed class IconQuad
     {
         public readonly Vector2[] pos = new Vector2[4];   // 0..1 dans le carré de l'icône
@@ -321,125 +468,137 @@ public class BlockIcon : MaskableGraphic
         public float shade;
     }
 
-    static readonly Dictionary<BlockType, IconQuad[]> cache = new();
+    static readonly Dictionary<BlockType, Texture2D> customIcons = new Dictionary<BlockType, Texture2D>();
+    static readonly Dictionary<BlockType, Texture2D> isoIcons = new Dictionary<BlockType, Texture2D>();
 
-    // Icônes dessinées à la main, chargées une seule fois (null = pas d'image pour ce bloc)
-    static readonly Dictionary<BlockType, Texture2D> customIcons = new();
+    // Pixels de l'atlas, lus une seule fois
+    static Color32[] atlasPixels;
+    static int atlasWidth, atlasHeight;
+    static Texture atlasSource;
 
-    World world;
-    Texture atlas;
-    BlockType type;
-    Texture2D customIcon;   // image du bloc affiché, ou null
-
-    public override Texture mainTexture => customIcon != null ? customIcon : atlas;
-
-    public void Setup(World world, Texture atlas)
+    // Vide les caches à chaque lancement du jeu, même si le « Domain Reload » est désactivé dans les
+    // options du projet (sinon une image ajoutée après une première partie ne serait jamais chargée)
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetCaches()
     {
-        this.world = world;
-        this.atlas = atlas;
-        SetMaterialDirty();
-        SetVerticesDirty();
+        customIcons.Clear();
+        isoIcons.Clear();
+        atlasPixels = null;
+        atlasSource = null;
     }
 
-    public void SetBlock(BlockType newType)
-    {
-        if (type == newType) return;
-        type = newType;
-
-        // Changer de texture (image <-> atlas) demande de refaire le matériau de l'icône
-        Texture2D icon = type == BlockType.Air ? null : CustomIcon(type);
-        if (icon != customIcon)
-        {
-            customIcon = icon;
-            SetMaterialDirty();
-        }
-
-        SetVerticesDirty();
-    }
-
-    static Texture2D CustomIcon(BlockType t)
+    public static Texture2D CustomIcon(BlockType t)
     {
         if (!customIcons.TryGetValue(t, out Texture2D tex))
         {
             tex = Resources.Load<Texture2D>("Icons/" + t);
             customIcons[t] = tex;
+
+            Debug.Log(tex != null
+                ? $"[Icônes] {t} : image Resources/Icons/{t} utilisée"
+                : $"[Icônes] {t} : pas d'image Resources/Icons/{t}, rendu automatique");
         }
         return tex;
     }
 
-    protected override void OnPopulateMesh(VertexHelper vh)
+    public static Texture2D IsoIcon(BlockType t, World world, Texture atlas)
     {
-        vh.Clear();
-        if (type == BlockType.Air || world == null) return;
+        if (isoIcons.TryGetValue(t, out Texture2D tex)) return tex;
 
-        Rect r = GetPixelAdjustedRect();
+        tex = RenderIso(BuildQuads(world.GetBlockMesh(t)), atlas);
+        isoIcons[t] = tex;
+        return tex;
+    }
 
-        // 1) Image dessinée à la main
-        if (customIcon != null)
-        {
-            AddFlat(vh, r, Vector2.zero, new Vector2(0f, 1f), Vector2.one, new Vector2(1f, 0f));
-            return;
-        }
+    // ------------------------------------------------------------------
+    // Rendu isométrique, pixel par pixel
+    // ------------------------------------------------------------------
 
-        // 2) Plante : sa texture à plat (deux plans croisés vus en biais seraient illisibles)
-        BlockInfo info = BlockDatabase.Get(type);
-        if (info.shape == BlockShape.Cross)
-        {
-            int tile = info.tileSide;
-            AddFlat(vh, r, BlockDatabase.TileUV(tile, 0f, 0f), BlockDatabase.TileUV(tile, 0f, 1f),
-                           BlockDatabase.TileUV(tile, 1f, 1f), BlockDatabase.TileUV(tile, 1f, 0f));
-            return;
-        }
+    static Texture2D RenderIso(IconQuad[] quads, Texture atlas)
+    {
+        if (!ReadAtlas(atlas)) return null;
 
-        // 3) Rendu isométrique du mesh
-        IconQuad[] quads = GetQuads(type);
+        var pixels = new Color32[IconSize * IconSize]; // transparent
 
+        // Du plus loin au plus proche : les faces proches recouvrent les autres (algorithme du peintre)
         foreach (IconQuad q in quads)
         {
-            int start = vh.currentVertCount;
-            var tint = new Color(color.r * q.shade, color.g * q.shade, color.b * q.shade, color.a);
+            // Un quad vu en projection orthographique est un parallélogramme : position et UV y sont affines
+            Vector2 p0 = q.pos[0] * IconSize;
+            Vector2 e1 = q.pos[1] * IconSize - p0;
+            Vector2 e2 = q.pos[3] * IconSize - p0;
+            float det = e1.x * e2.y - e1.y * e2.x;
+            if (Mathf.Abs(det) < 1e-6f) continue; // vu par la tranche
 
-            for (int k = 0; k < 4; k++)
+            Vector2 uv0 = q.uv[0], du = q.uv[1] - q.uv[0], dv = q.uv[3] - q.uv[0];
+
+            Vector2 min = Vector2.Min(Vector2.Min(p0, p0 + e1), Vector2.Min(p0 + e2, p0 + e1 + e2));
+            Vector2 max = Vector2.Max(Vector2.Max(p0, p0 + e1), Vector2.Max(p0 + e2, p0 + e1 + e2));
+            int x0 = Mathf.Max(0, Mathf.FloorToInt(min.x)), x1 = Mathf.Min(IconSize - 1, Mathf.CeilToInt(max.x));
+            int y0 = Mathf.Max(0, Mathf.FloorToInt(min.y)), y1 = Mathf.Min(IconSize - 1, Mathf.CeilToInt(max.y));
+
+            for (int py = y0; py <= y1; py++)
+            for (int px = x0; px <= x1; px++)
             {
-                UIVertex v = UIVertex.simpleVert;
-                v.position = new Vector3(r.x + q.pos[k].x * r.width, r.y + q.pos[k].y * r.height, 0f);
-                v.uv0 = q.uv[k];
-                v.color = tint;
-                vh.AddVert(v);
+                float cx = px + 0.5f - p0.x, cy = py + 0.5f - p0.y;
+                float a = (cx * e2.y - cy * e2.x) / det;
+                float b = (e1.x * cy - e1.y * cx) / det;
+                if (a < 0f || a > 1f || b < 0f || b > 1f) continue;
+
+                Vector2 uv = uv0 + du * a + dv * b;
+                int tx = Mathf.Clamp((int)(uv.x * atlasWidth), 0, atlasWidth - 1);
+                int ty = Mathf.Clamp((int)(uv.y * atlasHeight), 0, atlasHeight - 1);
+                Color32 c = atlasPixels[ty * atlasWidth + tx];
+                if (c.a < 128) continue; // trous des feuilles, de la torche...
+
+                pixels[py * IconSize + px] = new Color32(
+                    (byte)(c.r * q.shade), (byte)(c.g * q.shade), (byte)(c.b * q.shade), 255);
             }
-
-            vh.AddTriangle(start, start + 1, start + 2);
-            vh.AddTriangle(start, start + 2, start + 3);
         }
+
+        var tex = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false)
+        {
+            filterMode = FilterMode.Point,
+            wrapMode = TextureWrapMode.Clamp,
+        };
+        tex.SetPixels32(pixels);
+        tex.Apply();
+        return tex;
     }
 
-    // Un carré qui remplit l'icône, avec les UV de ses 4 coins (bas-gauche, haut-gauche, haut-droite, bas-droite)
-    void AddFlat(VertexHelper vh, Rect r, Vector2 uv0, Vector2 uv1, Vector2 uv2, Vector2 uv3)
+    // Copie les pixels de l'atlas en mémoire (une fois). Marche même si la texture n'est pas « Read/Write » :
+    // on la recopie alors dans une RenderTexture que l'on relit.
+    static bool ReadAtlas(Texture atlas)
     {
-        Vector2[] corners = { new Vector2(r.xMin, r.yMin), new Vector2(r.xMin, r.yMax), new Vector2(r.xMax, r.yMax), new Vector2(r.xMax, r.yMin) };
-        Vector2[] uvs = { uv0, uv1, uv2, uv3 };
+        if (atlas == null) return false;
+        if (atlasPixels != null && atlasSource == atlas) return true;
 
-        for (int k = 0; k < 4; k++)
+        atlasWidth = atlas.width;
+        atlasHeight = atlas.height;
+
+        if (atlas is Texture2D t2 && t2.isReadable)
         {
-            UIVertex v = UIVertex.simpleVert;
-            v.position = new Vector3(corners[k].x, corners[k].y, 0f);
-            v.uv0 = uvs[k];
-            v.color = color;
-            vh.AddVert(v);
+            atlasPixels = t2.GetPixels32();
+        }
+        else
+        {
+            RenderTexture rt = RenderTexture.GetTemporary(atlasWidth, atlasHeight, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            Graphics.Blit(atlas, rt);
+
+            RenderTexture previous = RenderTexture.active;
+            RenderTexture.active = rt;
+            var copy = new Texture2D(atlasWidth, atlasHeight, TextureFormat.RGBA32, false);
+            copy.ReadPixels(new Rect(0, 0, atlasWidth, atlasHeight), 0, 0);
+            copy.Apply();
+            RenderTexture.active = previous;
+            RenderTexture.ReleaseTemporary(rt);
+
+            atlasPixels = copy.GetPixels32();
+            Object.Destroy(copy);
         }
 
-        vh.AddTriangle(0, 1, 2);
-        vh.AddTriangle(0, 2, 3);
-    }
-
-    IconQuad[] GetQuads(BlockType t)
-    {
-        if (!cache.TryGetValue(t, out IconQuad[] quads))
-        {
-            quads = BuildQuads(world.GetBlockMesh(t));
-            cache[t] = quads;
-        }
-        return quads;
+        atlasSource = atlas;
+        return true;
     }
 
     // Les quads visibles du mesh (4 sommets consécutifs chacun), projetés, triés du plus loin au plus proche
@@ -480,7 +639,7 @@ public class BlockIcon : MaskableGraphic
             list.Add((q, depth));
         }
 
-        // Les plus lointains d'abord (algorithme du peintre)
+        // Les plus lointains d'abord
         list.Sort((a, b) => b.depth.CompareTo(a.depth));
 
         // L'icône remplit le carré (92 %), centrée

@@ -23,6 +23,17 @@ public sealed class MeshBuffers
     // (début, fin, mode) des sommets à éclairage spécial (plantes, torche) : voir LightMode
     public readonly List<Vector3Int> litRanges = new List<Vector3Int>(64);
 
+    // Sens du courant (x, z) de chaque sommet, rangé dans le canal UV1 : le shader de l'eau fait défiler sa
+    // texture dans ce sens. Zéro partout, sauf sur le dessus de l'eau qui coule.
+    public readonly List<Vector2> flow = new List<Vector2>(16384);
+    public readonly List<(int start, Vector2 dir)> waterFlow = new List<(int start, Vector2 dir)>(256);
+
+    // Smooth lighting : sommets de l'eau (éclairage plat, une valeur par face), sommets à éclairage plat,
+    // et faces dont il faut retourner la diagonale (voir ChunkMesher.ApplyVertexLight)
+    public readonly List<Vector2Int> waterRanges = new List<Vector2Int>(64);
+    public readonly List<bool> flat = new List<bool>(16384);
+    public readonly HashSet<int> flipQuads = new HashSet<int>();
+
     public bool failed;
 
     public void Clear()
@@ -36,6 +47,11 @@ public sealed class MeshBuffers
         colVerts.Clear();
         colTris.Clear();
         litRanges.Clear();
+        flow.Clear();
+        waterFlow.Clear();
+        waterRanges.Clear();
+        flat.Clear();
+        flipQuads.Clear();
         failed = false;
     }
 
@@ -334,6 +350,11 @@ public sealed class ChunkMesher
             for (int i = r.x; i < r.y; i++)
                 buf.colors[i] = new Color32(255, 255, 255, (byte)r.z);
 
+        // Sens du courant (UV1) : zéro, sauf sur le dessus de l'eau
+        for (int i = 0; i < count; i++) buf.flow.Add(Vector2.zero);
+        foreach (var wf in buf.waterFlow)
+            for (int k = 0; k < 4; k++) buf.flow[wf.start + k] = wf.dir;
+
         // Lumière des torches (R) et du ciel (G) de chaque face
         ApplyVertexLight();
     }
@@ -451,6 +472,13 @@ public sealed class ChunkMesher
     // Le dessus est incliné d'après la hauteur de ses 4 coins ; les côtés montent jusqu'à ces coins.
     void AddLiquid(BlockType type, int x, int y, int z, Vector3 pos)
     {
+        int firstVertex = buf.vertices.Count;
+        AddLiquidFaces(type, x, y, z, pos);
+        buf.waterRanges.Add(new Vector2Int(firstVertex, buf.vertices.Count)); // l'eau garde un éclairage plat
+    }
+
+    void AddLiquidFaces(BlockType type, int x, int y, int z, Vector3 pos)
+    {
         FillNeighbors(x, y, z);
 
         // Hauteur des 4 coins du dessus
@@ -467,13 +495,23 @@ public sealed class ChunkMesher
             h10 = CornerHeight(type, x + 1, y, z);
         }
 
+        bool fullHeight = h00 >= 1f && h01 >= 1f && h11 >= 1f && h10 >= 1f;
+
+        // Sens du courant : vers le bas de la pente de la surface (zéro sur un lac, où tout est à la même hauteur)
+        var downhill = new Vector2((h00 + h01) - (h10 + h11), (h00 + h10) - (h01 + h11)) * 0.5f;
+
         for (int f = 0; f < 6; f++)
         {
             BlockType n = nb[f];
-            if (n == type || BlockDatabase.IsOpaque(n)) continue;
+            if (n == type) continue;
+
+            // Contre un bloc opaque, la face est cachée. Sauf le dessus : la surface est plus basse que le bloc
+            // posé sur l'eau, et on la voit par l'interstice entre les deux.
+            if (BlockDatabase.IsOpaque(n) && (f != 0 || fullHeight)) continue;
 
             int tile = BlockDatabase.GetTile(type, f);
             int start = buf.vertices.Count;
+            if (f == 0) buf.waterFlow.Add((start, downhill));
 
             for (int i = 0; i < 4; i++)
             {
@@ -569,23 +607,158 @@ public sealed class ChunkMesher
     // Lumière des torches (R) et du ciel (G) de chaque face, dans les couleurs de sommet : 0 à 255 pour
     // les niveaux 0 à 15, B = 255. L'alpha (mode d'éclairage) est conservé.
     // Un échantillon par quad (4 sommets consécutifs), pris juste DEVANT la face.
+    // Smooth lighting façon Minecraft (lumière lissée et occlusion ambiante aux coins des faces).
+    // Réglé par World avant le démarrage des threads de maillage. Le changer demande de refaire les meshes.
+    public static bool SmoothLighting = true;
+
+    // Luminosité d'un coin selon son occlusion ambiante : 0 = coincé par deux blocs, 3 = libre (comme Minecraft)
+    static readonly float[] AoBrightness = { 0.5f, 0.68f, 0.84f, 1f };
+
+    // Couleur des sommets : R = lumière des torches, G = lumière du ciel (niveau x 17), B = occlusion ambiante,
+    // A = mode d'éclairage (déjà rempli)
     void ApplyVertexLight()
     {
         List<Vector3> verts = buf.vertices;
         List<Vector3> normals = buf.normals;
-        List<Color32> colors = buf.colors;
 
-        for (int i = 0; i + 3 < verts.Count; i += 4)
+        // Sommets qui gardent un éclairage plat : plantes et torche (modes spéciaux), eau
+        int count = verts.Count;
+        for (int i = 0; i < count; i++) buf.flat.Add(false);
+        foreach (Vector3Int r in buf.litRanges)
+            for (int i = r.x; i < r.y; i++) buf.flat[i] = true;
+        foreach (Vector2Int r in buf.waterRanges)
+            for (int i = r.x; i < r.y; i++) buf.flat[i] = true;
+
+        for (int i = 0; i + 3 < count; i += 4)
         {
             Vector3 center = (verts[i] + verts[i + 1] + verts[i + 2] + verts[i + 3]) * 0.25f;
-            Vector3 p = center + normals[i] * 0.25f;
+            Vector3 n = normals[i];
 
-            int packed = LightAt((int)Math.Floor(p.x), (int)Math.Floor(p.y), (int)Math.Floor(p.z));
-            byte blockLight = (byte)((packed & 15) * 17);
-            byte skyLight = (byte)((packed >> 4) * 17);
+            if (!SmoothLighting || buf.flat[i] || !SmoothQuad(i, center, n))
+                FlatQuad(i, center, n);
+        }
 
-            for (int k = 0; k < 4; k++)
-                colors[i + k] = new Color32(blockLight, skyLight, 255, colors[i + k].a);
+        FlipDarkDiagonals();
+    }
+
+    // Éclairage plat : la lumière de la case devant la face, la même pour les 4 sommets
+    void FlatQuad(int i, Vector3 center, Vector3 n)
+    {
+        Vector3 p = center + n * 0.25f;
+        int px = (int)Math.Floor(p.x), py = (int)Math.Floor(p.y), pz = (int)Math.Floor(p.z);
+
+        // Devant la face, un bloc opaque (sans lumière) : on lit la case derrière la face.
+        // Ex. : la surface de l'eau sous un bloc posé dessus, éclairée par la case d'eau elle-même.
+        if (BlockDatabase.IsOpaque(BlockAt(px, py, pz)))
+        {
+            p = center - n * 0.25f;
+            px = (int)Math.Floor(p.x); py = (int)Math.Floor(p.y); pz = (int)Math.Floor(p.z);
+        }
+
+        int packed = LightAt(px, py, pz);
+        byte blockLight = (byte)((packed & 15) * 17);
+        byte skyLight = (byte)((packed >> 4) * 17);
+
+        List<Color32> colors = buf.colors;
+        for (int k = 0; k < 4; k++)
+            colors[i + k] = new Color32(blockLight, skyLight, 255, colors[i + k].a);
+    }
+
+    readonly float[] cornerBrightness = new float[4];
+
+    // Smooth lighting d'une face : pour chaque coin, les 4 cases qui le touchent devant la face
+    //   F  = la case devant la face (côté centre de la face)
+    //   S1, S2 = ses voisines le long des deux axes de la face, vers le coin
+    //   C  = la case en diagonale, au coin
+    // Lumière = moyenne des cases non opaques ; occlusion = nombre de cases opaques parmi S1, S2 et C
+    // (S1 et S2 opaques : le coin est coincé, C ne compte plus, comme Minecraft).
+    // Retourne false si la face ne s'y prête pas (case devant opaque) : elle sera éclairée à plat.
+    bool SmoothQuad(int i, Vector3 center, Vector3 n)
+    {
+        // Axes de la face
+        Vector3 t1, t2;
+        float ax = Math.Abs(n.x), ay = Math.Abs(n.y), az = Math.Abs(n.z);
+        if (ay >= ax && ay >= az) { t1 = Vector3.right; t2 = Vector3.forward; }
+        else if (ax >= az)        { t1 = Vector3.up;    t2 = Vector3.forward; }
+        else                      { t1 = Vector3.right; t2 = Vector3.up; }
+
+        List<Vector3> verts = buf.vertices;
+        List<Color32> colors = buf.colors;
+
+        for (int k = 0; k < 4; k++)
+        {
+            Vector3 v = verts[i + k];
+            float s1 = Vector3.Dot(v - center, t1) >= 0f ? 0.5f : -0.5f;  // vers le coin, le long de chaque axe
+            float s2 = Vector3.Dot(v - center, t2) >= 0f ? 0.5f : -0.5f;
+            Vector3 front = v + n * 0.25f;
+
+            Vector3 f  = front - t1 * s1 - t2 * s2;
+            Vector3 c1 = front + t1 * s1 - t2 * s2;
+            Vector3 c2 = front - t1 * s1 + t2 * s2;
+            Vector3 cc = front + t1 * s1 + t2 * s2;
+
+            if (Opaque(f)) return false;
+            bool o1 = Opaque(c1), o2 = Opaque(c2), oc = Opaque(cc);
+
+            int ao = (o1 && o2) ? 0 : 3 - ((o1 ? 1 : 0) + (o2 ? 1 : 0) + (oc ? 1 : 0));
+
+            int sumBlock = 0, sumSky = 0, samples = 0;
+            AddLight(f, ref sumBlock, ref sumSky, ref samples);
+            if (!o1) AddLight(c1, ref sumBlock, ref sumSky, ref samples);
+            if (!o2) AddLight(c2, ref sumBlock, ref sumSky, ref samples);
+            if (!oc && !(o1 && o2)) AddLight(cc, ref sumBlock, ref sumSky, ref samples);
+
+            float block = sumBlock / (float)samples;
+            float sky = sumSky / (float)samples;
+
+            colors[i + k] = new Color32(
+                (byte)Math.Round(block * 17f), (byte)Math.Round(sky * 17f),
+                (byte)Math.Round(AoBrightness[ao] * 255f), colors[i + k].a);
+
+            cornerBrightness[k] = AoBrightness[ao] * (Math.Max(block, sky) + 1f);
+        }
+
+        // La face est coupée en deux triangles par la diagonale 0-2. Si cette diagonale est la plus sombre, on la
+        // retourne (diagonale 1-3) : sinon l'ombre d'un coin s'étirerait en traînée jusqu'au coin opposé.
+        if (cornerBrightness[0] + cornerBrightness[2] < cornerBrightness[1] + cornerBrightness[3])
+            buf.flipQuads.Add(i);
+
+        return true;
+    }
+
+    // Une case d'un chunk voisin pas encore chargé est « inconnue » : ni opaque, ni comptée dans la moyenne
+    // (sinon les coins au bord du monde chargé seraient assombris à tort)
+    bool Opaque(Vector3 p)
+    {
+        int x = (int)Math.Floor(p.x), y = (int)Math.Floor(p.y), z = (int)Math.Floor(p.z);
+        return TryCell(x, y, z, out BlockType type, out _) && BlockDatabase.IsOpaque(type);
+    }
+
+    void AddLight(Vector3 p, ref int sumBlock, ref int sumSky, ref int samples)
+    {
+        int x = (int)Math.Floor(p.x), y = (int)Math.Floor(p.y), z = (int)Math.Floor(p.z);
+        if (!TryCell(x, y, z, out _, out _)) return;
+
+        int packed = LightAt(x, y, z);
+        sumBlock += packed & 15;
+        sumSky += packed >> 4;
+        samples++;
+    }
+
+    // Retourne la diagonale des faces marquées : (0,1,2)(0,2,3) devient (1,2,3)(1,3,0), même sens de rotation
+    void FlipDarkDiagonals()
+    {
+        if (buf.flipQuads.Count == 0) return;
+
+        List<int> tris = buf.triangles;
+        for (int k = 0; k + 5 < tris.Count; k += 6)
+        {
+            int a = tris[k];
+            if (!buf.flipQuads.Contains(a)) continue;
+            if (tris[k + 1] != a + 1 || tris[k + 2] != a + 2 || tris[k + 3] != a || tris[k + 4] != a + 2 || tris[k + 5] != a + 3) continue;
+
+            tris[k] = a + 1; tris[k + 1] = a + 2; tris[k + 2] = a + 3;
+            tris[k + 3] = a + 1; tris[k + 4] = a + 3; tris[k + 5] = a;
         }
     }
 }

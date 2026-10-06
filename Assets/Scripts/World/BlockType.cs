@@ -22,7 +22,11 @@ public enum BlockType : byte
     Sand,
     StoneSlabTop,
     StoneDoubleSlab,
-    Water
+    Water,
+    CoalOre,
+    IronOre,
+    GoldOre,
+    DiamondOre,
 }
 
 public enum BlockShape : byte
@@ -103,6 +107,7 @@ public struct BlockInfo
     public byte emission; // lumière émise, de 0 à 15 (torche : 14)
     public byte lightFilter; // lumière absorbée en traversant le bloc (feuilles : 1). Un bloc opaque bloque tout.
     public bool dropsNothing;
+    public float breakTime;
     public BlockType dropOverride;
     public byte dropCount;
     public byte flushMask;
@@ -112,6 +117,10 @@ public struct BlockInfo
     public ModelQuad[] quads;                   // modèles importés (Blockbench)
     public Box[] collisionBoxes;                // null = aucune collision
     public Box[] selectionBoxes;                // zone visée par le raycast (casser/poser), même sans collision
+
+    public ToolKind tool;       // outil qui accélère la casse (pioche, hache, pelle)
+    public int harvestLevel;    // niveau d'outil exigé pour récupérer le bloc (0 = aucun ; 1 bois, 2 pierre, 3 fer, 4 diamant)
+    public ItemType dropItem;   // objet lâché à la place du bloc ; None = le bloc lui-même
 }
 
 
@@ -169,6 +178,10 @@ public static class BlockDatabase
         infos[(int)BlockType.Log] = Solid(top: 7, bottom: 7, side: 6);
         infos[(int)BlockType.Bedrock] = Solid(top: 4, bottom: 4, side: 4);
         infos[(int)BlockType.Sand] = Solid(top: 12, bottom: 12, side: 12);
+        infos[(int)BlockType.CoalOre] = Solid(top: 16, bottom: 16, side: 16);
+        infos[(int)BlockType.IronOre] = Solid(top: 17, bottom: 17, side: 17);
+        infos[(int)BlockType.GoldOre] = Solid(top: 18, bottom: 18, side: 18);
+        infos[(int)BlockType.DiamondOre] = Solid(top: 19, bottom: 19, side: 19);
 
         // Feuilles : visibles, transparentes, sans collision
         infos[(int)BlockType.Leaves] = new BlockInfo
@@ -268,6 +281,44 @@ public static class BlockDatabase
         infos[(int)BlockType.StoneDoubleSlab].dropOverride = BlockType.StoneSlab;
         infos[(int)BlockType.StoneDoubleSlab].dropCount = 2;
 
+        SetBreakTime(BlockType.Bedrock, -1f);     // incassable
+        SetBreakTime(BlockType.Grass, 0.9f);
+        SetBreakTime(BlockType.Dirt, 0.75f);
+        SetBreakTime(BlockType.Sand, 0.75f);
+        SetBreakTime(BlockType.Stone, 2f);
+        SetBreakTime(BlockType.Log, 3f);
+        SetBreakTime(BlockType.Leaves, 0.35f);
+        SetBreakTime(BlockType.Glass, 0.45f);
+        SetBreakTime(BlockType.TallGrass, 0f);    // instantané
+        SetBreakTime(BlockType.Torch, 0f);
+        SetBreakTime(BlockType.StoneSlab, 2f);
+        SetBreakTime(BlockType.StoneSlabTop, 2f);
+        SetBreakTime(BlockType.StoneDoubleSlab, 2f);
+        SetBreakTime(BlockType.Anvil, 4f);
+        SetBreakTime(BlockType.AnvilRotated, 4f);
+        SetBreakTime(BlockType.CoalOre, 3f);
+        SetBreakTime(BlockType.IronOre, 3.5f);
+        SetBreakTime(BlockType.GoldOre, 3.5f);
+        SetBreakTime(BlockType.DiamondOre, 4f);
+
+        SetTool(BlockType.Grass, ToolKind.Shovel);
+        SetTool(BlockType.Dirt, ToolKind.Shovel);
+        SetTool(BlockType.Sand, ToolKind.Shovel);
+        SetTool(BlockType.Log, ToolKind.Axe);
+        SetTool(BlockType.Stone, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.StoneSlab, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.StoneSlabTop, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.StoneDoubleSlab, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.Anvil, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.AnvilRotated, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.CoalOre, ToolKind.Pickaxe, 1);
+        SetTool(BlockType.IronOre, ToolKind.Pickaxe, 2);
+        SetTool(BlockType.GoldOre, ToolKind.Pickaxe, 3);
+        SetTool(BlockType.DiamondOre, ToolKind.Pickaxe, 3);
+
+        infos[(int)BlockType.CoalOre].dropItem = ItemType.Coal;
+        infos[(int)BlockType.DiamondOre].dropItem = ItemType.Diamond;
+
         // Remplit les tables de lecture rapide (APRÈS toutes les règles ci-dessus)
         for (int i = 0; i < infos.Length; i++)
         {
@@ -281,7 +332,12 @@ public static class BlockDatabase
     // ------------------------------------------------------------------
     // Modèles
     // ------------------------------------------------------------------
-
+    static void SetTool(BlockType type, ToolKind tool, int harvestLevel = 0)
+    {
+        infos[(int)type].tool = tool;
+        infos[(int)type].harvestLevel = harvestLevel;
+    }
+    static void SetBreakTime(BlockType type, float seconds) => infos[(int)type].breakTime = seconds;
     static Element[] AnvilElements() => new[]
     {
         E(2, 0, 2, 14, 4, 14,  top: 10, bottom: 10, side: 10),   // pied

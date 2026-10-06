@@ -661,6 +661,7 @@ GameObject:
   m_Component:
   - component: {fileID: 628363073}
   - component: {fileID: 628363072}
+  - component: {fileID: 628363074}
   m_Layer: 0
   m_Name: World
   m_TagString: Untagged
@@ -687,6 +688,7 @@ MonoBehaviour:
   maxBlockUpdatesPerFrame: 256
   chunkMaterial: {fileID: 2100000, guid: eb2d557371650164da0ba75562715aa7, type: 2}
   waterMaterial: {fileID: 2100000, guid: cc806ef781deaa74bbdd7d045f35f065, type: 2}
+  smoothLighting: 1
   player: {fileID: 981828837}
   renderDistance: 24
   workerThreads: 0
@@ -694,13 +696,14 @@ MonoBehaviour:
   maxMeshJobsInFlight: 6
   integrateBudgetMs: 3
   colliderRadius: 2
-  worldSeed: 12345
+  worldSeed: 123456
   baseHeight: 64
   seaLevel: 62
   hillHeight: 10
   mountainHeight: 80
   featureScale: 1
   caves: 1
+  ores: 1
   caveDensity: 0.5
   treeDensity: 0.5
   showcaseBlocks: 1
@@ -722,6 +725,39 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &628363074
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 628363071}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ca31e06d74448b449a07c68553aedcf1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::DayNightCycle
+  dayLengthMinutes: 20
+  startTime: 0.05
+  fastForwardKey: 107
+  fastForwardSpeed: 60
+  sun: {fileID: 410087040}
+  sunIntensity: 1.2
+  noonColor: {r: 1, g: 0.96, b: 0.88, a: 1}
+  sunsetColor: {r: 1, g: 0.55, b: 0.3, a: 1}
+  moonIntensity: 0.3
+  moonColor: {r: 0.55, g: 0.65, b: 1, a: 1}
+  sunTilt: 0
+  sunYaw: 0
+  sunAngleStep: 1
+  nightSkyLight: 0.2
+  voxelSky: 1
+  skyMaterial: {fileID: 2100000, guid: ebb99d97f75c3604faf722048a784659, type: 2}
+  daySky: {r: 0.52, g: 0.74, b: 1, a: 1}
+  sunsetSky: {r: 0.98, g: 0.58, b: 0.35, a: 1}
+  nightSky: {r: 0.02, g: 0.03, b: 0.08, a: 1}
+  daySkyboxExposure: 1.3
+  nightSkyboxExposure: 0.08
 --- !u!1 &832575517
 GameObject:
   m_ObjectHideFlags: 0
@@ -784,6 +820,7 @@ GameObject:
   - component: {fileID: 981828842}
   - component: {fileID: 981828841}
   - component: {fileID: 981828843}
+  - component: {fileID: 981828844}
   m_Layer: 0
   m_Name: Player
   m_TagString: Untagged
@@ -846,6 +883,8 @@ MonoBehaviour:
   waterGravityFactor: 0.25
   swimSinkSpeed: 3
   swimUpSpeed: 4.5
+  waterPushSpeed: 2.5
+  waterPushAcceleration: 6
   underwaterTint: {r: 0.1, g: 0.25, b: 0.6, a: 0.45}
   mouseSensitivity: 2
   forwardKey: 122
@@ -853,7 +892,7 @@ MonoBehaviour:
   leftKey: 113
   rightKey: 100
   jumpKey: 32
-  sprintKey: 304
+  sprintKey: 306
 --- !u!114 &981828841
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -981,13 +1020,28 @@ MonoBehaviour:
   toggleKey: 101
   dropKey: 103
   giveTestItems: 1
-  startItems:
-  - type: 16
-    count: 64
-  - type: 12
-    count: 64
+  startItems: []
   saveToDisk: 1
   saveFileName: inventory.json
+--- !u!114 &981828844
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 981828836}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9dcccfa6deb2c0544b2935e071efe76f, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BlockBreaker
+  world: {fileID: 628363072}
+  cam: {fileID: 239091775}
+  reach: 5
+  hitLayers:
+    m_Bits: 4294967295
+  breakCooldown: 0.25
+  crackMaterial: {fileID: 2100000, guid: 88eda581a2218634eb07640a8f7c2401, type: 2}
 --- !u!1 &1255864322
 GameObject:
   m_ObjectHideFlags: 0
@@ -1134,7 +1188,6 @@ MonoBehaviour:
   world: {fileID: 628363072}
   slotSize: 48
   gap: 4
-  atlas: {fileID: 0}
 --- !u!1 &1294280166
 GameObject:
   m_ObjectHideFlags: 0

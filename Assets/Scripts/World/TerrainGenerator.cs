@@ -12,6 +12,7 @@ public struct TerrainSettings
     public float mountainHeight;  // hauteur des montagnes au-dessus des plaines
     public float scale;           // taille des reliefs : 2 = deux fois plus étalés
     public bool caves;
+    public bool ores;             // filons de minerais dans la pierre
     public float caveDensity;     // 0 à 1
     public float treeDensity;     // 0 à 1 (0 = aucun arbre)
     public bool showcase;         // quelques blocs de démonstration près de l'origine
@@ -26,6 +27,7 @@ public struct TerrainSettings
 //   2. les COUCHES : herbe, terre, pierre ; la roche affleure sur les pentes raides et en altitude ;
 //      sable sur les plages et au fond de l'eau ; bedrock tout en bas ; eau jusqu'au niveau de la mer ;
 //   3. les GROTTES : des tunnels qui serpentent et de grandes cavernes en profondeur ;
+//      puis les MINERAIS : des filons dans la pierre (ils affleurent sur les parois des grottes) ;
 //   4. la VÉGÉTATION : arbres (en forêts plus ou moins denses) et herbes hautes.
 public static class TerrainGenerator
 {
@@ -79,6 +81,9 @@ public static class TerrainGenerator
             if (columnTop > d.highest) d.highest = columnTop;
             grassTop[x * SZ + z] = d.blocks[col + h - 1] == (byte)BlockType.Grass;
         }
+
+        // Minerais : après les grottes (ils affleurent sur leurs parois), avant la végétation
+        if (s.ores) PlaceOres(d, s, ox, oz);
 
         // 4) Végétation
         if (s.treeDensity > 0f) PlaceTrees(d, s, ox, oz);
@@ -241,6 +246,99 @@ public static class TerrainGenerator
         }
 
         return false;
+    }
+
+    // ------------------------------------------------------------------
+    // Minerais
+    // ------------------------------------------------------------------
+
+    readonly struct OreSpec
+    {
+        public readonly BlockType type;
+        public readonly int veinsPerChunk, veinSize, minY, maxY;
+
+        public OreSpec(BlockType type, int veinsPerChunk, int veinSize, int minY, int maxY)
+        {
+            this.type = type; this.veinsPerChunk = veinsPerChunk; this.veinSize = veinSize;
+            this.minY = minY; this.maxY = maxY;
+        }
+    }
+
+    // Inspiré de Minecraft : le charbon partout, le fer plus bas, l'or et le diamant tout au fond
+    static readonly OreSpec[] Ores =
+    {
+        new OreSpec(BlockType.CoalOre,    20, 12, 5, 130),
+        new OreSpec(BlockType.IronOre,    10,  8, 5,  70),
+        new OreSpec(BlockType.GoldOre,     3,  7, 5,  32),
+        new OreSpec(BlockType.DiamondOre,  1,  6, 5,  16),
+    };
+
+    static readonly int[] StepX = { 1, -1, 0, 0, 0, 0 };
+    static readonly int[] StepY = { 0, 0, 1, -1, 0, 0 };
+    static readonly int[] StepZ = { 0, 0, 0, 0, 1, -1 };
+
+    // Chaque filon naît dans un chunk (position tirée au hasard, toujours la même pour une graine donnée) et
+    // grandit par une marche au hasard. Un filon peut déborder sur le chunk voisin : chaque chunk parcourt
+    // aussi les filons de ses 8 voisins et pose la partie qui tombe chez lui. Le minerai ne remplace que la pierre.
+    static void PlaceOres(ChunkData d, TerrainSettings s, int ox, int oz)
+    {
+        for (int ci = -1; ci <= 1; ci++)
+        for (int cj = -1; cj <= 1; cj++)
+        {
+            int ncx = d.coord.x + ci, ncz = d.coord.y + cj;
+
+            for (int o = 0; o < Ores.Length; o++)
+            {
+                OreSpec ore = Ores[o];
+                for (int v = 0; v < ore.veinsPerChunk; v++)
+                {
+                    uint rng = VeinSeed(ncx, ncz, o, v, s.seed);
+                    int x = ncx * Chunk.SizeX + (int)(Rand(ref rng) * Chunk.SizeX);
+                    int z = ncz * Chunk.SizeZ + (int)(Rand(ref rng) * Chunk.SizeZ);
+                    int y = ore.minY + (int)(Rand(ref rng) * (ore.maxY - ore.minY + 1));
+                    int size = 1 + (int)(Rand(ref rng) * ore.veinSize);
+
+                    // Le filon ne peut pas atteindre ce chunk : inutile de le parcourir
+                    if (x < ox - size || x >= ox + Chunk.SizeX + size || z < oz - size || z >= oz + Chunk.SizeZ + size) continue;
+
+                    for (int k = 0; k < size; k++)
+                    {
+                        SetOre(d, x - ox, y, z - oz, ore.type);
+                        int step = (int)(Rand(ref rng) * 6f);
+                        x += StepX[step]; y += StepY[step]; z += StepZ[step];
+                    }
+                }
+            }
+        }
+    }
+
+    static void SetOre(ChunkData d, int x, int y, int z, BlockType type)
+    {
+        if (!Inside(x, y, z)) return;
+        int i = ChunkData.Index(x, y, z);
+        if (d.blocks[i] == (byte)BlockType.Stone) d.blocks[i] = (byte)type;
+    }
+
+    static uint VeinSeed(int cx, int cz, int ore, int vein, int seed)
+    {
+        unchecked
+        {
+            uint h = (uint)seed * 0x9E3779B1u;
+            h ^= (uint)cx * 0x85EBCA6Bu; h = (h << 13) | (h >> 19);
+            h ^= (uint)cz * 0xC2B2AE35u; h = (h << 13) | (h >> 19);
+            h ^= (uint)(ore * 7919 + vein * 104729) * 0x27D4EB2Fu;
+            h ^= h >> 15; h *= 0x2C1B3C6Du; h ^= h >> 12;
+            return h == 0 ? 1u : h;
+        }
+    }
+
+    // Nombre pseudo-aléatoire entre 0 et 1 (xorshift)
+    static float Rand(ref uint state)
+    {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        return (state & 0xFFFFFF) / (float)0x1000000;
     }
 
     // ------------------------------------------------------------------

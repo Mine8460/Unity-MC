@@ -12,6 +12,10 @@ Shader "Voxel/PixelShadowLit"
         _MinLight ("Lumière minimale", Range(0, 0.2)) = 0.03
         _BlockLightColor ("Couleur de la lumière des torches", Color) = (1, 0.82, 0.55, 1)
 
+        [Header(Smooth lighting)]
+        _AOStrength ("Ombre douce dans les coins (occlusion ambiante)", Range(0, 1)) = 1
+        [ToggleUI] _SmoothLightPixels ("Dégradés en paliers de pixels", Float) = 0
+
         // Les textures ci-dessous sont des ATLAS rangés exactement comme l'atlas principal
         // (même nombre de tuiles, même taille). Une case cochée active la texture ; décochée = rendu d'origine.
         [Header(Height map (relief))]
@@ -63,6 +67,8 @@ Shader "Voxel/PixelShadowLit"
             float _SkyBrightness;
             float _MinLight;
             half4 _BlockLightColor;
+            float _AOStrength;
+            float _SmoothLightPixels;
             float _ParallaxDepth;
             float _ParallaxShadow;
             float _WallShade;
@@ -72,6 +78,10 @@ Shader "Voxel/PixelShadowLit"
             float _ReflectionStrength;
             half4 _EmissionColor;
         CBUFFER_END
+
+            // Obscurité de la nuit, réglée pour TOUS les matériaux par DayNightCycle (0 = plein jour).
+            // Sans DayNightCycle dans la scène, elle vaut 0 : rien ne change.
+            float _VoxelDarkness;
         ENDHLSL
 
         // ---------------------------------------------------------------
@@ -108,7 +118,7 @@ Shader "Voxel/PixelShadowLit"
                 float3 normalWS   : TEXCOORD1;
                 float2 uv         : TEXCOORD2;
                 half   lightMode  : TEXCOORD3;   // 0 = pixels d'ombre, 0.5 = ombre par bloc, 1 = plein éclat
-                half2  light      : TEXCOORD4;   // x = lumière des torches, y = lumière du ciel (0 à 1 pour les niveaux 0 à 15)
+                half3  light      : TEXCOORD4;   // x = lumière des torches, y = lumière du ciel (0 à 1 pour les niveaux 0 à 15), z = occlusion ambiante
             };
 
             Varyings vert(Attributes IN)
@@ -118,7 +128,7 @@ Shader "Voxel/PixelShadowLit"
                 OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.lightMode = IN.color.a;
-                OUT.light = IN.color.rg;
+                OUT.light = IN.color.rgb;
                 OUT.uv = TRANSFORM_TEX(IN.uv, _BaseMap);
                 return OUT;
             }
@@ -303,6 +313,28 @@ Shader "Voxel/PixelShadowLit"
                     posQ = blockCell + float3(0.5, 1.02, 0.5);
                 }
 
+                // --- Smooth lighting : lumière (torches, ciel) et occlusion ambiante, lissées entre les coins ---
+                // Option « paliers de pixels » : on prend la valeur au CENTRE du pixel de texture (posQ) plutôt
+                // qu'au point exact. Sur un triangle, ces valeurs varient linéairement : leur pente se déduit des
+                // dérivées (mêmes calculs que pour les UV).
+                float3 la = IN.light;
+                {
+                    float3 dp1 = ddx(IN.positionWS), dp2 = ddy(IN.positionWS);
+                    float3 dl1 = ddx(la), dl2 = ddy(la);
+                    float3 dp2perp = cross(dp2, n), dp1perp = cross(n, dp1);
+                    float det = dot(dp1, dp2perp);
+
+                    if (_SmoothLightPixels > 0.5 && IN.lightMode < 0.25 && abs(det) > 1e-12)
+                    {
+                        float3 offset = posQ - IN.positionWS;
+                        offset -= n * dot(offset, n);                       // seulement le long de la face
+                        float3 g0 = (dp2perp * dl1.x + dp1perp * dl2.x) / det;
+                        float3 g1 = (dp2perp * dl1.y + dp1perp * dl2.y) / det;
+                        float3 g2 = (dp2perp * dl1.z + dp1perp * dl2.z) / det;
+                        la += float3(dot(g0, offset), dot(g1, offset), dot(g2, offset));
+                    }
+                }
+
                 float4 shadowCoord = TransformWorldToShadowCoord(posQ);
                 Light mainLight = GetMainLight(shadowCoord);
 
@@ -332,14 +364,15 @@ Shader "Voxel/PixelShadowLit"
                 }
             #endif
 
-                float3 lightColor = lerp(_Ambient.xxx, mainLight.color, lit);
+                float3 lightColor = lerp(_Ambient.xxx, max(mainLight.color, _Ambient.xxx), lit); // jamais plus sombre qu'à l'ombre
 
                 // Lumière par bloc : le ciel (soleil et ombres du soleil, atténués par le niveau de ciel)
                 // et les torches (lumière chaude). On garde la plus forte des deux.
-                float skyLevel = LightCurve(IN.light.y) * _SkyBrightness;
+                float skyLevel = LightCurve(la.y) * _SkyBrightness * (1.0 - _VoxelDarkness); // la nuit, le ciel éclaire moins (pas les torches)
                 float3 skyColor = lightColor * skyLevel;
-                float3 blockColor = _BlockLightColor.rgb * LightCurve(IN.light.x);
+                float3 blockColor = _BlockLightColor.rgb * LightCurve(la.x);
                 float3 lighting = max(max(skyColor, blockColor), _MinLight.xxx);
+                lighting *= lerp(1.0, la.z, _AOStrength); // ombre douce dans les coins
 
                 float3 albedo = tex.rgb;
                 float3 color;

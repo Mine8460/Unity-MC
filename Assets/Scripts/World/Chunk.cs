@@ -116,6 +116,7 @@ public partial class Chunk : MonoBehaviour
         mesh.SetTriangles(b.waterTriangles, 1);
         mesh.SetNormals(b.normals);
         mesh.SetUVs(0, b.uvs);
+        mesh.SetUVs(1, b.flow); // sens du courant de l'eau (animation de sa texture)
         mesh.SetColors(b.colors);
         mesh.RecalculateBounds();
         meshFilter.sharedMesh = mesh;

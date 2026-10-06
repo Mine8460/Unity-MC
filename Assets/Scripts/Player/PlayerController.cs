@@ -52,6 +52,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float swimSinkSpeed = 3f;
     [Tooltip("Vitesse de remontée en maintenant la touche de saut")]
     [SerializeField] float swimUpSpeed = 4.5f;
+    [Tooltip("Vitesse max à laquelle le courant entraîne le joueur")]
+    [SerializeField] float waterPushSpeed = 2.5f;
+    [Tooltip("Rapidité avec laquelle le courant prend (et lâche) le joueur")]
+    [SerializeField] float waterPushAcceleration = 6f;
     [Tooltip("Voile de couleur quand la tête est sous l'eau (alpha 0 = aucun)")]
     [SerializeField] Color underwaterTint = new Color(0.1f, 0.25f, 0.6f, 0.45f);
 
@@ -87,6 +91,7 @@ public class PlayerController : MonoBehaviour
     bool inWater;         // le corps est dans l'eau (nage)
     bool eyeInWater;      // la tête est sous la surface (voile bleu)
     bool blockedSideways; // un mur a arrêté le déplacement horizontal pendant cette frame
+    Vector3 waterPush;    // vitesse donnée par le courant (arrive et repart progressivement)
 
     // Doit être identique à LiquidSurface dans ChunkMesher : la surface de l'eau est à 14/16 du bloc
     const float WaterSurface = 14f / 16f;
@@ -210,11 +215,15 @@ public class PlayerController : MonoBehaviour
 
         inWater = IsInWater(transform.position);
 
+        // Courant : il entraîne le joueur, en plus de sa propre marche
+        Vector3 pushTarget = inWater ? WaterFlowAround(transform.position) * waterPushSpeed : Vector3.zero;
+        waterPush = Vector3.MoveTowards(waterPush, pushTarget, waterPushAcceleration * dt);
+
         Vector3 dir = Quaternion.Euler(0f, yaw, 0f) * input;
         float speed = Input.GetKey(sprintKey) ? sprintSpeed : walkSpeed;
         if (inWater) speed *= swimSpeedFactor;
-        velocity.x = dir.x * speed;
-        velocity.z = dir.z * speed;
+        velocity.x = dir.x * speed + waterPush.x;
+        velocity.z = dir.z * speed + waterPush.z;
 
         // Au sol ? On teste juste sous les pieds : fiable quel que soit le framerate
         Vector3 pos = transform.position;
@@ -230,10 +239,11 @@ public class PlayerController : MonoBehaviour
         if (inWater)
         {
             // Nage : on coule lentement (l'eau amortit aussi les chutes) ; saut maintenu = on remonte
+            // (dans une cascade, waterPush.y < 0 : on coule plus vite, et remonter est plus dur)
             if (swimUp)
-                velocity.y = Mathf.MoveTowards(velocity.y, swimUpSpeed, gravity * 2f * dt);
+                velocity.y = Mathf.MoveTowards(velocity.y, swimUpSpeed + waterPush.y, gravity * 2f * dt);
             else
-                velocity.y = Mathf.Max(velocity.y - gravity * waterGravityFactor * dt, -swimSinkSpeed);
+                velocity.y = Mathf.Max(velocity.y - gravity * waterGravityFactor * dt, -swimSinkSpeed + Mathf.Min(0f, waterPush.y));
             jumpBuffer = 0f;
         }
         else
@@ -348,6 +358,18 @@ public class PlayerController : MonoBehaviour
     {
         BlockType type = world.GetBlock(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
         return BlockDatabase.GetRef(type).shape == BlockShape.Liquid;
+    }
+
+    // Sens du courant autour du corps (pieds et mi-hauteur), de longueur 1, ou zéro
+    Vector3 WaterFlowAround(Vector3 feet)
+    {
+        Vector3 sum = Vector3.zero;
+        foreach (float h in new[] { 0.1f, height * 0.5f })
+        {
+            Vector3 p = feet + Vector3.up * h;
+            sum += world.GetFlow(Mathf.FloorToInt(p.x), Mathf.FloorToInt(p.y), Mathf.FloorToInt(p.z));
+        }
+        return sum.sqrMagnitude > 1e-6f ? sum.normalized : Vector3.zero;
     }
 
     // Le corps est dans l'eau : aux pieds ou à mi-hauteur

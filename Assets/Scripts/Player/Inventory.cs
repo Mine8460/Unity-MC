@@ -74,7 +74,7 @@ public class Inventory : MonoBehaviour
 
         if (startItems != null && startItems.Count > 0)
         {
-            foreach (ItemStack s in startItems) Add(s.type, s.count);
+            foreach (ItemStack s in startItems) Add(s.type, s.count, s.damage);
             return;
         }
 
@@ -85,6 +85,24 @@ public class Inventory : MonoBehaviour
         Add(BlockType.Torch, 32);
         Add(BlockType.StoneSlab, 32);
         Add(BlockType.Anvil, 8);
+        Add(BlockType.Sand, 16);
+
+        // Outils, en attendant l'artisanat
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.IronAxe, 1);
+        Add(ItemType.IronShovel, 1);
+        Add(ItemType.Stick, 16);
+
+        // Outils pour tester (en attendant l'artisanat)
+        Add(ItemType.WoodenPickaxe, 1);
+        Add(ItemType.StonePickaxe, 1);
+        Add(ItemType.IronPickaxe, 1);
+        Add(ItemType.DiamondPickaxe, 1);
+        Add(ItemType.StoneAxe, 1);
+        Add(ItemType.StoneShovel, 1);
     }
 
     void Update()
@@ -127,16 +145,19 @@ public class Inventory : MonoBehaviour
     // ------------------------------------------------------------------
 
     // Ajoute des objets (barre d'accès d'abord). Renvoie la quantité qui n'a PAS pu être ajoutée.
-    public int Add(BlockType type, int count)
+    public int Add(ItemType type, int count, int damage = 0)
     {
-        if (type == BlockType.Air || count <= 0) return 0;
+        if (type == ItemType.None || count <= 0) return 0;
+
+        var item = new ItemStack(type, 1, damage);
+        int max = ItemDatabase.MaxStack(type);
 
         // 1) complète les piles existantes
         for (int i = 0; i < Size && count > 0; i++)
         {
-            if (slots[i].IsEmpty || slots[i].type != type || slots[i].count >= MaxStack) continue;
+            if (slots[i].IsEmpty || !slots[i].CanStackWith(item) || slots[i].count >= max) continue;
 
-            int moved = Mathf.Min(count, MaxStack - slots[i].count);
+            int moved = Mathf.Min(count, max - slots[i].count);
             slots[i].count += moved;
             count -= moved;
         }
@@ -146,8 +167,8 @@ public class Inventory : MonoBehaviour
         {
             if (!slots[i].IsEmpty) continue;
 
-            int moved = Mathf.Min(count, MaxStack);
-            slots[i] = new ItemStack(type, moved);
+            int moved = Mathf.Min(count, max);
+            slots[i] = new ItemStack(type, moved, damage);
             count -= moved;
         }
 
@@ -155,23 +176,46 @@ public class Inventory : MonoBehaviour
         return count;
     }
 
+    public int Add(BlockType block, int count) => Add(ItemDatabase.FromBlock(block), count);
+
+    // Ajoute une pile (en gardant l'usure d'un outil). Renvoie la quantité qui n'a pas pu être ajoutée.
+    public int Add(ItemStack stack) => stack.IsEmpty ? 0 : Add(stack.type, stack.count, stack.damage);
+
     // Y a-t-il de la place pour au moins un objet de ce type ?
-    public bool CanAccept(BlockType type)
+    public bool CanAccept(ItemStack stack)
     {
+        int max = ItemDatabase.MaxStack(stack.type);
         for (int i = 0; i < Size; i++)
         {
             if (slots[i].IsEmpty) return true;
-            if (slots[i].type == type && slots[i].count < MaxStack) return true;
+            if (slots[i].CanStackWith(stack) && slots[i].count < max) return true;
         }
         return false;
     }
 
-    // L'objet de la case sélectionnée de la barre d'accès (false si elle est vide)
+    public bool CanAccept(BlockType block) => CanAccept(new ItemStack(block, 1));
+
+    // L'objet de la case sélectionnée de la barre d'accès (vide si rien)
+    public ItemStack SelectedStack => slots[selected];
+
+    // Le BLOC de la case sélectionnée (false si elle est vide ou si ce n'est pas un bloc : outil, lingot...)
     public bool TryGetSelected(out BlockType type)
     {
         ItemStack stack = slots[selected];
-        type = stack.type;
-        return !stack.IsEmpty;
+        type = stack.Block;
+        return stack.IsBlock;
+    }
+
+    // Abîme l'outil sélectionné ; il casse quand son usure atteint sa durabilité
+    public void DamageSelected(int amount = 1)
+    {
+        ItemStack stack = slots[selected];
+        int durability = ItemDatabase.Get(stack.type).durability;
+        if (stack.IsEmpty || durability <= 0) return;
+
+        stack.damage += amount;
+        slots[selected] = stack.damage >= durability ? default : stack;
+        Touch();
     }
 
     // Retire des objets de la case sélectionnée (après avoir posé un bloc, par exemple)
@@ -233,10 +277,10 @@ public class Inventory : MonoBehaviour
                 slots[i] = held;
                 held = default;
             }
-            else if (slot.type == held.type)
+            else if (slot.CanStackWith(held))
             {
                 // fusionne : le surplus reste dans la main
-                int moved = Mathf.Min(held.count, MaxStack - slot.count);
+                int moved = Mathf.Max(0, Mathf.Min(held.count, ItemDatabase.MaxStack(slot.type) - slot.count));
                 slot.count += moved;
                 held.count -= moved;
                 slots[i] = slot;
@@ -256,18 +300,18 @@ public class Inventory : MonoBehaviour
                 if (!slot.IsEmpty)
                 {
                     int take = (slot.count + 1) / 2;
-                    held = new ItemStack(slot.type, take);
+                    held = new ItemStack(slot.type, take, slot.damage);
                     slot.count -= take;
                     slots[i] = slot.count > 0 ? slot : default;
                 }
             }
             else if (slot.IsEmpty)
             {
-                slots[i] = new ItemStack(held.type, 1);
+                slots[i] = new ItemStack(held.type, 1, held.damage);
                 held.count--;
                 if (held.count <= 0) held = default;
             }
-            else if (slot.type == held.type && slot.count < MaxStack)
+            else if (slot.CanStackWith(held) && slot.count < ItemDatabase.MaxStack(slot.type))
             {
                 slot.count++;
                 slots[i] = slot;
@@ -290,7 +334,7 @@ public class Inventory : MonoBehaviour
         if (held.IsEmpty) return;
 
         int n = onlyOne ? 1 : held.count;
-        DropFromPlayer(new ItemStack(held.type, n));
+        DropFromPlayer(new ItemStack(held.type, n, held.damage));
 
         held.count -= n;
         if (held.count <= 0) held = default;
@@ -303,8 +347,8 @@ public class Inventory : MonoBehaviour
     {
         if (held.IsEmpty) return;
 
-        int left = Add(held.type, held.count);
-        if (left > 0) DropFromPlayer(new ItemStack(held.type, left));
+        int left = Add(held);
+        if (left > 0) DropFromPlayer(new ItemStack(held.type, left, held.damage));
         held = default;
     }
 
@@ -319,7 +363,7 @@ public class Inventory : MonoBehaviour
 
         int n = wholeStack ? stack.count : 1;
         ConsumeSelected(n);
-        DropFromPlayer(new ItemStack(stack.type, n));
+        DropFromPlayer(new ItemStack(stack.type, n, stack.damage));
     }
 
     // Jette des objets devant le joueur (ils ne peuvent pas être ramassés tout de suite)
@@ -329,7 +373,7 @@ public class Inventory : MonoBehaviour
 
         Transform eye = cameraTransform != null ? cameraTransform : transform;
         Vector3 origin = eye.position + eye.forward * 0.4f - Vector3.up * 0.3f;
-        world.DropItem(stack.type, stack.count, origin, eye.forward * 4f + Vector3.up * 1.5f, 2f);
+        world.DropItem(stack, origin, eye.forward * 4f + Vector3.up * 1.5f, 2f);
     }
 
     // ------------------------------------------------------------------
@@ -341,6 +385,7 @@ public class Inventory : MonoBehaviour
     {
         public int[] types;
         public int[] counts;
+        public int[] damages;   // usure des outils (absente des anciennes sauvegardes)
         public int selected;
     }
 
@@ -358,11 +403,12 @@ public class Inventory : MonoBehaviour
 
         try
         {
-            var data = new SaveData { types = new int[Size], counts = new int[Size], selected = selected };
+            var data = new SaveData { types = new int[Size], counts = new int[Size], damages = new int[Size], selected = selected };
             for (int i = 0; i < Size; i++)
             {
                 data.types[i] = (int)slots[i].type;
                 data.counts[i] = slots[i].IsEmpty ? 0 : slots[i].count;
+                data.damages[i] = slots[i].damage;
             }
 
             File.WriteAllText(SavePath, JsonUtility.ToJson(data));
@@ -387,8 +433,10 @@ public class Inventory : MonoBehaviour
 
             for (int i = 0; i < Size; i++)
             {
+                var type = (ItemType)data.types[i];
+                int damage = data.damages != null && data.damages.Length == Size ? data.damages[i] : 0;
                 slots[i] = data.counts[i] > 0
-                    ? new ItemStack((BlockType)data.types[i], Mathf.Min(data.counts[i], MaxStack))
+                    ? new ItemStack(type, Mathf.Min(data.counts[i], ItemDatabase.MaxStack(type)), damage)
                     : default;
             }
 
