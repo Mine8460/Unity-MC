@@ -95,31 +95,16 @@ public class Inventory : MonoBehaviour
             return;
         }
 
-        Add(BlockType.Stone, 64);
-        Add(BlockType.Dirt, 64);
-        Add(BlockType.Log, 32);
-        Add(BlockType.Glass, 32);
-        Add(BlockType.Torch, 32);
-        Add(BlockType.StoneSlab, 32);
-        Add(BlockType.Anvil, 8);
-        Add(BlockType.Sand, 16);
-
-        // Outils, en attendant l'artisanat
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
         Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.IronAxe, 1);
-        Add(ItemType.IronShovel, 1);
-        Add(ItemType.Stick, 16);
-
-        // Outils pour tester (en attendant l'artisanat)
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
-        Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.StoneAxe, 1);
-        Add(ItemType.StoneShovel, 1);
+        Add(ItemType.DiamondAxe, 1);
+        Add(ItemType.DiamondShovel, 1);
+        Add(BlockType.Log, 64);
+        Add(BlockType.Planks, 64);
+        Add(BlockType.CraftingTable, 1);
+        Add(BlockType.Glass, 64);
+        Add(BlockType.Torch, 64);
+        Add(BlockType.StoneSlab, 64);
+        Add(BlockType.Anvil, 64);
     }
 
     void Update()
