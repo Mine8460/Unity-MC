@@ -12,7 +12,7 @@ public class PlayerController : MonoBehaviour
     [Tooltip("La caméra, placée EN ENFANT de ce GameObject")]
     [SerializeField] Transform cameraTransform;
 
-    [Header("Hitbox (comme Minecraft) - le pivot est aux PIEDS")]
+    [Header("Hitbox - Pivot aux pieds")]
     [SerializeField] float width = 0.6f;
     [SerializeField] float height = 1.8f;
 
@@ -23,15 +23,15 @@ public class PlayerController : MonoBehaviour
     [SerializeField] float gravity = 32f;
     [SerializeField] float maxFallSpeed = 50f;
     [SerializeField] float respawnBelowY = -30f;
-    [Tooltip("Au lancement, pose le joueur sur le sol (le terrain est généré : sa hauteur n'est pas connue à l'avance)")]
+    [Tooltip("Au lancement, pose le joueur sur le sol")]
     [SerializeField] bool spawnOnSurface = true;
-    [Tooltip("Hauteur max montée sans sauter (0,5 = dalles ; Minecraft : 0,6)")]
+    [Tooltip("Hauteur max montée sans sauter")]
     [SerializeField] float stepHeight = 0.6f;
 
-    [Header("Vol (pour explorer)")]
+    [Header("Vol")]
     [Tooltip("Active / coupe le vol")]
     [SerializeField] KeyCode flyToggleKey = KeyCode.F;
-    [Tooltip("Double-appui sur la touche de saut pour activer / couper le vol, comme Minecraft")]
+    [Tooltip("Double-appui sur la touche de saut pour activer / couper le vol")]
     [SerializeField] bool doubleTapJumpToFly = true;
     [SerializeField] float flySpeed = 11f;
     [Tooltip("Vitesse en maintenant la touche d'accélération")]
