@@ -12,22 +12,22 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
   m_Name: Planks
   m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
-  id: 25
+  id: 22
   displayName: Planks
   shape: 0
   side:
     albedo: {fileID: 2800000, guid: b55e1cd381fcc42448e19fd9304cd1c1, type: 3}
-    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    height: {fileID: 2800000, guid: e943fd983d0afab4cafba9791a0c8c5c, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
   top:
     albedo: {fileID: 2800000, guid: b55e1cd381fcc42448e19fd9304cd1c1, type: 3}
-    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    height: {fileID: 2800000, guid: e943fd983d0afab4cafba9791a0c8c5c, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
   bottom:
     albedo: {fileID: 2800000, guid: b55e1cd381fcc42448e19fd9304cd1c1, type: 3}
-    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    height: {fileID: 2800000, guid: e943fd983d0afab4cafba9791a0c8c5c, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
   lightMode: 0
@@ -36,6 +36,8 @@ MonoBehaviour:
   blockbenchModel: {fileID: 0}
   blockbenchTextures: []
   blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 1
   opaque: 1
   collidable: 1
   cullSameType: 0

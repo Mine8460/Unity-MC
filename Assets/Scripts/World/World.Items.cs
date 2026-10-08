@@ -11,6 +11,7 @@ public partial class World
     bool inventorySearched;
 
     public Material ChunkMaterial => chunkMaterial;
+    public Material TranslucentMaterial => translucentMaterial != null ? translucentMaterial : chunkMaterial;
 
     // L'atlas de textures (pour dessiner les icônes de l'interface)
     public Texture AtlasTexture => chunkMaterial != null ? chunkMaterial.GetTexture("_BaseMap") : null;
@@ -77,6 +78,10 @@ public partial class World
     public void DropBlockItem(BlockType type, Vector3 position)
     {
         BlockInfo info = BlockDatabase.Get(type);
+        // Les feuilles lâchent parfois une pomme
+        if (type == BlockType.Leaves && Random.value < 0.05f)
+            DropItem(ItemType.Apple, 1, position, new Vector3(Random.Range(-1f, 1f), 3f, Random.Range(-1f, 1f)));
+
         if (info.dropsNothing) return;
 
         // L'objet lâché : un objet précis (minerai de charbon -> charbon), sinon un bloc (l'herbe -> la terre), sinon lui-même
@@ -97,6 +102,8 @@ public partial class World
         BlockType type = GetBlock(x, y, z);
         if (!BlockDatabase.Get(type).hasMesh) return false;
         if (!SetBlock(x, y, z, BlockType.Air)) return false;
+
+        if (FurnaceIds.IsFurnace(type)) DropFurnaceContents(x, y, z); // le contenu du four tombe toujours
 
         if (drop) DropBlockItem(type, new Vector3(x + 0.5f, y + 0.1f, z + 0.5f));
         return true;

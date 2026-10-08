@@ -1,0 +1,30 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07cffc146023f6d449ff288af26d1975, type: 3}
+  m_Name: StoneAxe
+  m_EditorClassIdentifier: Assembly-CSharp::ItemDefinition
+  id: 267
+  displayName: Hache en pierre
+  icon: {fileID: 2800000, guid: 61f2ce49e0b9fd140ba7e02fc6a37b27, type: 3}
+  iconColor:
+    serializedVersion: 2
+    rgba: 4287401100
+  maxStack: 1
+  tool: 2
+  toolLevel: 2
+  toolSpeed: 4
+  durability: 131
+  attackDamage: 4
+  food: 0
+  saturation: 0
+  fuelTime: 0
+  placesBlock: {fileID: 0}

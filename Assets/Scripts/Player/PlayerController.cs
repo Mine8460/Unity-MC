@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -39,6 +40,9 @@ public class PlayerController : MonoBehaviour
     [Tooltip("Plus haut = s'arrête et repart plus sèchement")]
     [SerializeField] float flyAcceleration = 60f;
     [Tooltip("En vol (saut = monter)")]
+    [SerializeField] KeyCode flyDownKey = KeyCode.LeftShift;
+    [SerializeField] KeyCode flyBoostKey = KeyCode.LeftControl;
+    [Tooltip("Mode fantôme : traverser les blocs en vol (touche ci-dessous pour basculer en jeu)")]
     [SerializeField] bool noClip = false;
     [SerializeField] KeyCode noClipKey = KeyCode.N;
 
@@ -59,6 +63,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Souris")]
     [SerializeField] float mouseSensitivity = 2f;
+
 
     // Marge minuscule : la hitbox est testée légèrement rétrécie, ce qui évite
     // de "toucher" les blocs voisins à cause des erreurs d'arrondi.
@@ -91,10 +96,30 @@ public class PlayerController : MonoBehaviour
 
     public bool IsFlying => flying;
 
+    // --- Utilisés par PlayerStats (santé / faim) ---
+    public bool InputLocked;                       // mort, menu... : le joueur ne répond plus aux touches
+    public bool EyeUnderwater => eyeInWater;
+    public bool InWater => inWater;
+    public float Yaw => yaw;                       // direction du regard (degrés), la vraie : le corps ne tourne pas
+    public Vector3 Velocity => velocity;
+    public bool IsSprinting => !InputLocked && !flying && runAction.IsPressed() && new Vector2(velocity.x, velocity.z).sqrMagnitude > 1f;
+    public event Action<float> Landed;             // distance de chute (en blocs) à l'atterrissage
+    public event Action Jumped;
+    float fallPeak;                                // point le plus haut de la chute en cours
+
     InputAction moveAction;
     InputAction runAction;
     InputAction sneakAction;
     InputAction jumpAction;
+
+    public void Respawn()
+    {
+        transform.position = spawnPoint;
+        velocity = Vector3.zero;
+        waterPush = Vector3.zero;
+        fallPeak = spawnPoint.y;
+        flying = false;
+    }
 
     void Awake()
     {
@@ -123,6 +148,8 @@ public class PlayerController : MonoBehaviour
 
     void Update()
     {
+        if (GetComponent<PlayerStats>().IsDead) return;
+
         if (Input.GetKeyDown(KeyCode.Escape)) LockCursor(false);
         if (Input.GetMouseButtonDown(0) && Cursor.lockState != CursorLockMode.Locked && !Inventory.IsOpen) LockCursor(true);
         bool active = Cursor.lockState == CursorLockMode.Locked;
@@ -135,18 +162,14 @@ public class PlayerController : MonoBehaviour
             pitch = Mathf.Clamp(pitch, -90f, 90f);
             cameraTransform.localRotation = Quaternion.Euler(pitch, yaw, 0f);
 
-            //if (Input.GetKeyDown(jumpKey))
-            //{
-
-
-            //    if (Input.GetKeyDown(flyToggleKey)) SetFlying(!flying);
-            //    if (flying && Input.GetKeyDown(noClipKey)) noClip = !noClip;
-            //}
-
-            Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
-            eyeInWater = IsEyeUnderwater();
+            if (Input.GetKeyDown(flyToggleKey)) SetFlying(!flying);
+            if (flying && Input.GetKeyDown(noClipKey)) noClip = !noClip;
         }
+
+        Simulate(Mathf.Min(Time.deltaTime, 0.05f), active);
+        eyeInWater = IsEyeUnderwater();
     }
+
     void OnJump(InputAction.CallbackContext context)
     {
         if (context.performed)
@@ -263,6 +286,7 @@ public class PlayerController : MonoBehaviour
             {
                 velocity.y = Mathf.Sqrt(2f * gravity * jumpHeight);
                 jumpBuffer = 0f;
+                if (Jumped != null) Jumped();
             }
 
             velocity.y = Mathf.Max(velocity.y - gravity * dt, -maxFallSpeed);
@@ -276,6 +300,16 @@ public class PlayerController : MonoBehaviour
         MoveAxis(ref pos, 2, velocity.z * dt);
         transform.position = pos;
 
+        // Chute : on retient le point le plus haut ; l'eau l'annule, le sol la compte
+        if (inWater) fallPeak = pos.y;
+        else if (Collide(pos + Vector3.down * GroundProbe, -1, 0f, out _))
+        {
+            float fall = fallPeak - pos.y;
+            fallPeak = pos.y;
+            if (fall > 0f && Landed != null) Landed(fall);
+        }
+        else fallPeak = Mathf.Max(fallPeak, pos.y);
+
         // Sortir de l'eau : en nageant vers le haut contre une berge, on se hisse dessus (comme Minecraft)
         if (inWater && swimUp && blockedSideways)
             velocity.y = Mathf.Max(velocity.y, Mathf.Sqrt(2f * gravity * jumpHeight));
@@ -285,6 +319,7 @@ public class PlayerController : MonoBehaviour
         {
             transform.position = spawnPoint;
             velocity = Vector3.zero;
+            fallPeak = spawnPoint.y;
         }
     }
 
@@ -296,6 +331,7 @@ public class PlayerController : MonoBehaviour
     {
         if (flying == on) return;
         flying = on;
+        fallPeak = transform.position.y;
         velocity = Vector3.zero;
 
         // En sortant du mode fantôme à l'intérieur d'un bloc, on remonte jusqu'à une case libre
@@ -308,7 +344,6 @@ public class PlayerController : MonoBehaviour
         Vector3 input = Vector3.zero;
         float vertical = 0f;
         bool boost = false;
-
         Vector2 move = moveAction.ReadValue<Vector2>();
         if (active)
         {

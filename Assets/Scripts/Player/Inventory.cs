@@ -53,6 +53,11 @@ public class Inventory : MonoBehaviour
     public ItemStack GetCraftSlot(int index) => craftGrid[index];
     public ItemStack CraftResult => Crafting.Match(craftGrid, CraftingSize);
 
+    // Four : quand l'écran est celui d'un four, FurnaceMode est vrai et Furnace donne son contenu
+    public bool FurnaceMode { get; private set; }
+    public Vector3Int FurnacePos { get; private set; }
+    public FurnaceData Furnace => FurnaceMode && world != null ? world.GetFurnace(FurnacePos, true) : null;
+
     // ------------------------------------------------------------------
     // Cycle de vie
     // ------------------------------------------------------------------
@@ -90,36 +95,29 @@ public class Inventory : MonoBehaviour
         Add(BlockType.Dirt, 64);
         Add(BlockType.Log, 32);
         Add(BlockType.Glass, 32);
-        Add(BlockType.Torch, 32);
-        Add(BlockType.StoneSlab, 32);
-        Add(BlockType.Anvil, 8);
+        Add(BlockType.TintedGlass, 32);
+        Add(BlockType.Anvil, 64);
         Add(BlockType.Sand, 16);
 
         // Outils, en attendant l'artisanat
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
         Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.IronAxe, 1);
-        Add(ItemType.IronShovel, 1);
-        Add(ItemType.Stick, 16);
+        Add(ItemType.DiamondAxe, 1);
+        Add(ItemType.DiamondShovel, 1);
 
         // Redstone, pour tester
         Add(ItemType.RedstoneDust, 64);
         Add(ItemType.Repeater, 8);
+        Add(ItemType.Apple, 8);
+        Add(BlockType.Furnace, 2);
+        Add(BlockType.IronOre, 16);
+        Add(BlockType.GoldOre, 8);
+        Add(BlockType.Sand, 16);
+        Add(ItemType.Coal, 16);
         Add((BlockType)Redstone.LeverOff, 8);
         Add((BlockType)Redstone.ButtonOff, 8);
         Add((BlockType)Redstone.TorchLit, 16);
         Add((BlockType)Redstone.Lamp, 16);
         Add((BlockType)Redstone.Block, 16);
-
-        // Outils pour tester (en attendant l'artisanat)
-        Add(ItemType.WoodenPickaxe, 1);
-        Add(ItemType.StonePickaxe, 1);
-        Add(ItemType.IronPickaxe, 1);
-        Add(ItemType.DiamondPickaxe, 1);
-        Add(ItemType.StoneAxe, 1);
-        Add(ItemType.StoneShovel, 1);
     }
 
     void Update()
@@ -276,6 +274,7 @@ public class Inventory : MonoBehaviour
         {
             ReturnHeldStack();
             ReturnCraftGrid();
+            FurnaceMode = false;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
             Save();
@@ -407,9 +406,51 @@ public class Inventory : MonoBehaviour
     }
 
     // Ouvre l'inventaire avec la grille 3 x 3 de l'établi
+    // Ouvre l'écran du four situé en pos
+    public void OpenFurnace(Vector3Int pos)
+    {
+        if (IsOpen || world == null) return;
+        if (world.GetFurnace(pos, true) == null) return;
+        CraftingSize = 2;
+        FurnacePos = pos;
+        FurnaceMode = true;
+        SetOpen(true);
+    }
+
+    // Clic sur une case du four : 0 = objet à cuire, 1 = combustible, 2 = résultat (on ne peut que le prendre)
+    public void ClickFurnaceSlot(int part, bool right)
+    {
+        FurnaceData f = Furnace;
+        if (f == null) return;
+
+        if (part == 2)
+        {
+            if (f.output.IsEmpty) return;
+            if (held.IsEmpty)
+            {
+                held = f.output;
+                f.output = default;
+            }
+            else if (held.CanStackWith(f.output) && held.count + f.output.count <= ItemDatabase.MaxStack(held.type))
+            {
+                held.count += f.output.count;
+                f.output = default;
+            }
+            Touch();
+            return;
+        }
+
+        if (part == 1 && !held.IsEmpty && !Smelting.IsFuel(held.type)) return; // seulement des combustibles
+
+        if (part == 0) ClickStack(ref f.input, right);
+        else ClickStack(ref f.fuel, right);
+        Touch();
+    }
+
     public void OpenCraftingTable()
     {
         if (IsOpen) return;
+        FurnaceMode = false;
         CraftingSize = 3;
         SetOpen(true);
     }

@@ -1,0 +1,78 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: FurnaceLit
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 101
+  displayName: Furnace
+  shape: 0
+  side:
+    albedo: {fileID: 2800000, guid: 1f9d81a35b7676e49a8e5f4f55931726, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  top:
+    albedo: {fileID: 2800000, guid: c81b529d264ce6a44bb0e721cd8c7e94, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  bottom:
+    albedo: {fileID: 2800000, guid: c81b529d264ce6a44bb0e721cd8c7e94, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  front:
+    albedo: {fileID: 2800000, guid: baab24bfe7b37cb4c936a4718c974a69, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  back:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  right:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  left:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  lightMode: 255
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 0}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 1
+  opaque: 1
+  collidable: 1
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 0
+  gravity: 0
+  support: 0
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 15
+  lightFilter: 1
+  breakTime: 2
+  tool: 1
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 11400000, guid: 72a9b14a73b8dc944ba98a3605437ac4, type: 2}
+  dropItem: 0
+  dropCount: 0
+  dropCountRandom: 0

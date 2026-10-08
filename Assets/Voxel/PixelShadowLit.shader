@@ -4,6 +4,12 @@ Shader "Voxel/PixelShadowLit"
     {
         [MainTexture] _BaseMap ("Atlas", 2D) = "white" {}
         _Cutoff ("Alpha Cutoff", Range(0, 1)) = 0.5
+        // Réglés par le code pour le matériau « translucide » (verre, etc.) : ne pas toucher
+        [HideInInspector] _Translucent ("Translucide (0/1)", Float) = 0
+        [HideInInspector] _BlendCutoff ("Seuil d'alpha translucide", Float) = 0.004
+        [HideInInspector] _SrcBlend ("Src", Float) = 1
+        [HideInInspector] _DstBlend ("Dst", Float) = 0
+        [HideInInspector] _ZWrite ("ZWrite", Float) = 1
         _PixelsPerBlock ("Pixels par bloc", Float) = 16
         _SampleBiasPx ("Bias de lecture (en pixels)", Range(0, 1)) = 0.15
         _Ambient ("Luminosité de l'ombre", Range(0, 1)) = 0.35
@@ -60,6 +66,8 @@ Shader "Voxel/PixelShadowLit"
         CBUFFER_START(UnityPerMaterial)
             float4 _BaseMap_ST;
             float _Cutoff;
+            float _Translucent;
+            float _BlendCutoff;
             float _PixelsPerBlock;
             float _SampleBiasPx;
             float _Ambient;
@@ -91,6 +99,8 @@ Shader "Voxel/PixelShadowLit"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+            Blend [_SrcBlend] [_DstBlend]
+            ZWrite [_ZWrite]
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -284,7 +294,7 @@ Shader "Voxel/PixelShadowLit"
             #endif
 
                 half4 tex = SAMPLE_TEXTURE2D_LOD(_BaseMap, sampler_BaseMap, uv, 0); // mip 0 : pas de mélange de tuiles à distance
-                clip(tex.a - _Cutoff);
+                clip(tex.a - (_Translucent > 0.5 ? _BlendCutoff : _Cutoff));
 
                 // --- Ombre pixelisée sur la grille ---
                 // 1) on passe en "espace pixels de texture"
@@ -372,9 +382,18 @@ Shader "Voxel/PixelShadowLit"
                 float3 skyColor = lightColor * skyLevel;
                 float3 blockColor = _BlockLightColor.rgb * LightCurve(la.x);
                 float3 lighting = max(max(skyColor, blockColor), _MinLight.xxx);
-                lighting *= lerp(1.0, la.z, _AOStrength); // ombre douce dans les coins
+                // Redstone (mode « Wire », alpha ~ 0,63) : la puissance (0 à 1) est dans le canal bleu. Pas d'occlusion ambiante.
+                bool isWire = IN.lightMode > 0.6 && IN.lightMode < 0.7;
+                lighting *= lerp(1.0, isWire ? 1.0 : la.z, _AOStrength); // ombre douce dans les coins
 
                 float3 albedo = tex.rgb;
+                if (isWire)
+                {
+                    // Teinte comme Minecraft : rouge sombre sans signal, rouge vif et un peu orangé à 15
+                    float t = la.z;
+                    float g = saturate(t * t * 0.7 - 0.5);
+                    albedo *= float3(lerp(0.3, 1.0, t), g, g);
+                }
                 float3 color;
 
             #if defined(_METALLICMAP)
@@ -425,7 +444,7 @@ Shader "Voxel/PixelShadowLit"
                 color += SAMPLE_TEXTURE2D_LOD(_EmissionMap, sampler_BaseMap, uv, 0).rgb * _EmissionColor.rgb;
             #endif
 
-                return half4(color, 1);
+                return half4(color, _Translucent > 0.5 ? tex.a : 1);
             }
             ENDHLSL
         }

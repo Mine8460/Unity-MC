@@ -25,6 +25,10 @@ public class InventoryUI : MonoBehaviour
         public Image durabilityImage;
     }
 
+    // Écran du four : barre de flamme (combustible) et flèche de progression
+    GameObject furnaceBars;
+    RectTransform flameFill, arrowFill;
+
     readonly SlotView[] hudSlots = new SlotView[Inventory.HotbarSize];
     readonly SlotView[] panelSlots = new SlotView[Inventory.Size];
     readonly SlotView[] craftSlots = new SlotView[9];   // grille d'artisanat affichée en 3 x 3 (2 x 2 utilisées dans l'inventaire)
@@ -82,6 +86,9 @@ public class InventoryUI : MonoBehaviour
     // Construction de l'interface
     // ------------------------------------------------------------------
 
+    // La barre d'accès (utilisée par PlayerStats pour accrocher les cœurs au-dessus)
+    public RectTransform HotbarRect => hud;
+
     void BuildCanvas()
     {
         // Le Canvas doit être à la RACINE de la scène. S'il est enfant d'un autre Canvas (celui de ton viseur,
@@ -91,6 +98,7 @@ public class InventoryUI : MonoBehaviour
         canvas = go.AddComponent<Canvas>();
         canvas.renderMode = RenderMode.ScreenSpaceOverlay;
         canvas.sortingOrder = 50;
+        canvas.pixelPerfect = true; // UI collée aux pixels de l'écran : pas de flou sur les icônes
 
         var scaler = go.AddComponent<CanvasScaler>();
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -130,18 +138,34 @@ public class InventoryUI : MonoBehaviour
         // Artisanat : titre, grille (colonnes 2 à 4), flèche (colonne 5), résultat (colonne 6)
         craftTitle = CreateLabel(panel, new Vector2(pad, -pad), new Vector2(slotSize + gap, slotSize), 15, TextAnchor.UpperLeft);
         for (int row = 0; row < 3; row++)
-            for (int col = 0; col < 3; col++)
-                craftSlots[row * 3 + col] = CreateSlot(panel, new Vector2(pad + (col + 1) * (slotSize + gap), -(pad + row * (slotSize + gap))));
+        for (int col = 0; col < 3; col++)
+            craftSlots[row * 3 + col] = CreateSlot(panel, new Vector2(pad + (col + 1) * (slotSize + gap), -(pad + row * (slotSize + gap))));
         CreateLabel(panel, new Vector2(pad + 4 * (slotSize + gap), -(pad + (slotSize + gap))), new Vector2(slotSize, slotSize), 30, TextAnchor.MiddleCenter).text = "→";
         resultView = CreateSlot(panel, new Vector2(pad + 5 * (slotSize + gap) + gap, -(pad + (slotSize + gap))));
 
+        // Four : la flamme au milieu (entre l'objet à cuire et le combustible), la flèche de progression
+        GameObject flameRoot, arrowRoot;
+        flameFill = CreateBar(panel, new Vector2(pad + 2 * (slotSize + gap) + slotSize * 0.3f, -(pad + (slotSize + gap) + slotSize * 0.1f)),
+                              new Vector2(slotSize * 0.4f, slotSize * 0.8f), new Color(1f, 0.55f, 0.1f), true, out flameRoot);
+        arrowFill = CreateBar(panel, new Vector2(pad + 4 * (slotSize + gap), -(pad + (slotSize + gap) + slotSize * 0.8f)),
+                              new Vector2(slotSize, 6f), new Color(0.9f, 0.9f, 0.9f), false, out arrowRoot);
+        furnaceBars = new GameObject("FurnaceBars", typeof(RectTransform));
+        furnaceBars.transform.SetParent(panel, false);
+        var barsRect = (RectTransform)furnaceBars.transform;
+        barsRect.anchorMin = Vector2.zero;   // remplit le panneau : les barres gardent leurs positions
+        barsRect.anchorMax = Vector2.one;
+        barsRect.offsetMin = barsRect.offsetMax = Vector2.zero;
+        flameRoot.transform.SetParent(furnaceBars.transform, false);
+        arrowRoot.transform.SetParent(furnaceBars.transform, false);
+        furnaceBars.SetActive(false);
+
         // 3 rangées d'inventaire (cases 9 à 35)
         for (int row = 0; row < 3; row++)
-            for (int col = 0; col < 9; col++)
-            {
-                Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + row * (slotSize + gap)));
-                panelSlots[9 + row * 9 + col] = CreateSlot(panel, pos);
-            }
+        for (int col = 0; col < 9; col++)
+        {
+            Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + row * (slotSize + gap)));
+            panelSlots[9 + row * 9 + col] = CreateSlot(panel, pos);
+        }
 
         // la barre d'accès, en bas (cases 0 à 8)
         for (int col = 0; col < 9; col++)
@@ -149,6 +173,35 @@ public class InventoryUI : MonoBehaviour
             Vector2 pos = new Vector2(pad + col * (slotSize + gap), -(pad + craftHeight + 3 * (slotSize + gap) + separation));
             panelSlots[col] = CreateSlot(panel, pos);
         }
+    }
+
+    // Une barre (fond sombre + remplissage) ; le remplissage est réglé avec SetBar
+    RectTransform CreateBar(Transform parent, Vector2 pos, Vector2 size, Color fillColor, bool vertical, out GameObject root)
+    {
+        RectTransform back = NewRect("Bar", parent);
+        back.anchorMin = back.anchorMax = back.pivot = new Vector2(0f, 1f);
+        back.sizeDelta = size;
+        back.anchoredPosition = pos;
+        var backImage = back.gameObject.AddComponent<Image>();
+        backImage.color = new Color(0f, 0f, 0f, 0.6f);
+        backImage.raycastTarget = false;
+
+        RectTransform fill = NewRect("Fill", back);
+        fill.anchorMin = Vector2.zero;
+        fill.anchorMax = Vector2.one;
+        fill.offsetMin = fill.offsetMax = Vector2.zero;
+        var fillImage = fill.gameObject.AddComponent<Image>();
+        fillImage.color = fillColor;
+        fillImage.raycastTarget = false;
+
+        root = back.gameObject;
+        return fill;
+    }
+
+    static void SetBar(RectTransform fill, float fraction, bool vertical)
+    {
+        fill.anchorMin = Vector2.zero;
+        fill.anchorMax = vertical ? new Vector2(1f, fraction) : new Vector2(fraction, 1f);
     }
 
     Text CreateLabel(Transform parent, Vector2 anchoredPos, Vector2 size, int fontSize, TextAnchor alignment)
@@ -301,10 +354,8 @@ public class InventoryUI : MonoBehaviour
     void Refresh()
     {
         bool open = Inventory.IsOpen;
-        if (hud != null)
-            hud.gameObject.SetActive(!open);
-        if (panel != null)
-            panel.gameObject.SetActive(open);
+        hud.gameObject.SetActive(!open);
+        panel.gameObject.SetActive(open);
 
         for (int i = 0; i < Inventory.HotbarSize; i++)
             Fill(hudSlots[i], inventory.GetSlot(i), i == inventory.Selected);
@@ -312,10 +363,26 @@ public class InventoryUI : MonoBehaviour
         for (int i = 0; i < Inventory.Size; i++)
             Fill(panelSlots[i], inventory.GetSlot(i), i < Inventory.HotbarSize && i == inventory.Selected);
 
-        // Artisanat : 2 x 2 dans l'inventaire, 3 x 3 à l'établi
-        int size = inventory.CraftingSize;
-        craftTitle.text = size == 3 ? "Établi" : "Artisanat";
-        for (int row = 0; row < 3; row++)
+        FurnaceData furnace = inventory.Furnace;
+        furnaceBars.SetActive(open && furnace != null);
+
+        if (furnace != null)
+        {
+            // Four : l'objet à cuire (case du haut), le combustible (case du bas), le résultat
+            craftTitle.text = "Four";
+            for (int i = 0; i < 9; i++) craftSlots[i].rect.gameObject.SetActive(i == 1 || i == 7);
+            Fill(craftSlots[1], furnace.input, false);
+            Fill(craftSlots[7], furnace.fuel, false);
+            Fill(resultView, furnace.output, false);
+            SetBar(flameFill, furnace.BurnFraction, true);
+            SetBar(arrowFill, furnace.CookFraction, false);
+        }
+        else
+        {
+            // Artisanat : 2 x 2 dans l'inventaire, 3 x 3 à l'établi
+            int size = inventory.CraftingSize;
+            craftTitle.text = size == 3 ? "Établi" : "Artisanat";
+            for (int row = 0; row < 3; row++)
             for (int col = 0; col < 3; col++)
             {
                 SlotView view = craftSlots[row * 3 + col];
@@ -323,7 +390,8 @@ public class InventoryUI : MonoBehaviour
                 view.rect.gameObject.SetActive(used);
                 if (used) Fill(view, inventory.GetCraftSlot(row * size + col), false);
             }
-        Fill(resultView, inventory.CraftResult, false);
+            Fill(resultView, inventory.CraftResult, false);
+        }
 
         Fill(heldView, inventory.HeldStack, false);
         heldView.rect.gameObject.SetActive(open && !inventory.HeldStack.IsEmpty);
@@ -343,7 +411,6 @@ public class InventoryUI : MonoBehaviour
 
     static void Fill(SlotView view, ItemStack stack, bool selected)
     {
-        if (view == null) return;
         view.icon.SetItem(stack.IsEmpty ? ItemType.None : stack.type);
         view.count.text = stack.count > 1 ? stack.count.ToString() : "";
         if (view.frame != null) view.frame.SetActive(selected);
@@ -351,7 +418,6 @@ public class InventoryUI : MonoBehaviour
         // Usure : seulement pour un outil déjà abîmé
         int durability = stack.IsEmpty ? 0 : ItemDatabase.Get(stack.type).durability;
         bool worn = durability > 0 && stack.damage > 0;
-        if (view.durability == null) return;
         view.durability.SetActive(worn);
         if (worn)
         {
@@ -368,6 +434,8 @@ public class InventoryUI : MonoBehaviour
             tooltip.gameObject.SetActive(false);
             return;
         }
+
+        if (inventory.FurnaceMode) Refresh(); // le four cuit : flamme et flèche avancent à chaque image
 
         Vector2 mouse = Input.mousePosition;
         RectTransformUtility.ScreenPointToLocalPointInRectangle(canvasRect, mouse, null, out Vector2 local);
@@ -387,9 +455,18 @@ public class InventoryUI : MonoBehaviour
         }
 
         // Case d'artisanat ou résultat sous la souris
+        FurnaceData furnace = inventory.Furnace;
         int size = inventory.CraftingSize;
         int hoveredCraft = -1;
-        for (int row = 0; row < size && hoveredCraft < 0; row++)
+        int hoveredFurnace = -1; // 0 = objet à cuire, 1 = combustible
+        if (furnace != null)
+        {
+            if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[1].rect, mouse, null)) hoveredFurnace = 0;
+            else if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[7].rect, mouse, null)) hoveredFurnace = 1;
+        }
+        else
+        {
+            for (int row = 0; row < size && hoveredCraft < 0; row++)
             for (int col = 0; col < size; col++)
             {
                 if (RectTransformUtility.RectangleContainsScreenPoint(craftSlots[row * 3 + col].rect, mouse, null))
@@ -398,6 +475,7 @@ public class InventoryUI : MonoBehaviour
                     break;
                 }
             }
+        }
         bool hoveredResult = RectTransformUtility.RectangleContainsScreenPoint(resultView.rect, mouse, null);
 
         bool left = Input.GetMouseButtonDown(0);
@@ -405,7 +483,11 @@ public class InventoryUI : MonoBehaviour
 
         if (left || right)
         {
-            if (hoveredResult)
+            if (hoveredResult && furnace != null)
+                inventory.ClickFurnaceSlot(2, right);
+            else if (hoveredFurnace >= 0)
+                inventory.ClickFurnaceSlot(hoveredFurnace, right);
+            else if (hoveredResult)
                 inventory.ClickResult(Input.GetKey(KeyCode.LeftShift) || Input.GetKey(KeyCode.RightShift)); // Maj : tout fabriquer
             else if (hoveredCraft >= 0)
                 inventory.ClickCraftSlot(hoveredCraft, right);
@@ -418,7 +500,9 @@ public class InventoryUI : MonoBehaviour
         // Info-bulle : le nom de l'objet sous la souris
         ItemStack hoveredStack = hovered >= 0 ? inventory.GetSlot(hovered)
                                : hoveredCraft >= 0 ? inventory.GetCraftSlot(hoveredCraft)
-                               : hoveredResult ? inventory.CraftResult : default;
+                               : hoveredFurnace == 0 ? furnace.input
+                               : hoveredFurnace == 1 ? furnace.fuel
+                               : hoveredResult ? (furnace != null ? furnace.output : inventory.CraftResult) : default;
         bool showTooltip = !hoveredStack.IsEmpty && inventory.HeldStack.IsEmpty;
         tooltip.gameObject.SetActive(showTooltip);
         if (showTooltip)
@@ -558,6 +642,10 @@ public static class BlockIconCache
         {
             tex = Resources.Load<Texture2D>("Icons/" + t);
             customIcons[t] = tex;
+
+            Debug.Log(tex != null
+                ? $"[Icônes] {t} : image Resources/Icons/{t} utilisée"
+                : $"[Icônes] {t} : pas d'image Resources/Icons/{t}, rendu automatique");
         }
         return tex;
     }
@@ -599,22 +687,22 @@ public static class BlockIconCache
             int y0 = Mathf.Max(0, Mathf.FloorToInt(min.y)), y1 = Mathf.Min(IconSize - 1, Mathf.CeilToInt(max.y));
 
             for (int py = y0; py <= y1; py++)
-                for (int px = x0; px <= x1; px++)
-                {
-                    float cx = px + 0.5f - p0.x, cy = py + 0.5f - p0.y;
-                    float a = (cx * e2.y - cy * e2.x) / det;
-                    float b = (e1.x * cy - e1.y * cx) / det;
-                    if (a < 0f || a > 1f || b < 0f || b > 1f) continue;
+            for (int px = x0; px <= x1; px++)
+            {
+                float cx = px + 0.5f - p0.x, cy = py + 0.5f - p0.y;
+                float a = (cx * e2.y - cy * e2.x) / det;
+                float b = (e1.x * cy - e1.y * cx) / det;
+                if (a < 0f || a > 1f || b < 0f || b > 1f) continue;
 
-                    Vector2 uv = uv0 + du * a + dv * b;
-                    int tx = Mathf.Clamp((int)(uv.x * atlasWidth), 0, atlasWidth - 1);
-                    int ty = Mathf.Clamp((int)(uv.y * atlasHeight), 0, atlasHeight - 1);
-                    Color32 c = atlasPixels[ty * atlasWidth + tx];
-                    if (c.a < 128) continue; // trous des feuilles, de la torche...
+                Vector2 uv = uv0 + du * a + dv * b;
+                int tx = Mathf.Clamp((int)(uv.x * atlasWidth), 0, atlasWidth - 1);
+                int ty = Mathf.Clamp((int)(uv.y * atlasHeight), 0, atlasHeight - 1);
+                Color32 c = atlasPixels[ty * atlasWidth + tx];
+                if (c.a < 128) continue; // trous des feuilles, de la torche...
 
-                    pixels[py * IconSize + px] = new Color32(
-                        (byte)(c.r * q.shade), (byte)(c.g * q.shade), (byte)(c.b * q.shade), 255);
-                }
+                pixels[py * IconSize + px] = new Color32(
+                    (byte)(c.r * q.shade), (byte)(c.g * q.shade), (byte)(c.b * q.shade), 255);
+            }
         }
 
         var tex = new Texture2D(IconSize, IconSize, TextureFormat.RGBA32, false)

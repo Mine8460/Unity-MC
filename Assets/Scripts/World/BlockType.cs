@@ -17,7 +17,7 @@ public enum BlockType : byte
     Anvil,
     AnvilRotated,
     Torch,
-    WallTorchNorth, WallTorchSouth, WallTorchEast, WallTorchWest,
+    WallTorch,
     Sand,
     StoneSlabTop,
     StoneDoubleSlab,
@@ -28,6 +28,9 @@ public enum BlockType : byte
     DiamondOre,
     Planks,
     CraftingTable,
+    TintedGlass,
+    Furnace = 100,
+    FurnaceLit = 101,
 
     // ----- Redstone : numéros FIXES à partir de 64 (ne les change jamais : ils sont écrits dans les sauvegardes) -----
     RedstoneOre = 64,
@@ -36,11 +39,11 @@ public enum BlockType : byte
     RedstoneLamp = 67,
     RedstoneLampLit = 68,
     // Torches de redstone allumées : au sol, puis contre un mur au nord (+Z), sud (-Z), est (+X), ouest (-X)
-    RedstoneTorch = 69, RedstoneWallTorchNorth, RedstoneWallTorchSouth, RedstoneWallTorchEast, RedstoneWallTorchWest,
-    RedstoneTorchUnlit = 74, RedstoneWallTorchUnlitNorth, RedstoneWallTorchUnlitSouth, RedstoneWallTorchUnlitEast, RedstoneWallTorchUnlitWest,
-    Lever = 79, LeverNorth, LeverSouth, LeverEast, LeverWest,
-    LeverOn = 84, LeverOnNorth, LeverOnSouth, LeverOnEast, LeverOnWest,
-    StoneButton = 89, StoneButtonNorth, StoneButtonSouth, StoneButtonEast, StoneButtonWest,
-    StoneButtonPressed = 94, StoneButtonPressedNorth, StoneButtonPressedSouth, StoneButtonPressedEast, StoneButtonPressedWest,
+    RedstoneTorch = 69, RedstoneWallTorch,
+    RedstoneTorchUnlit = 74, RedstoneWallTorchUnlit,
+    Lever = 79, LeverWall,
+    LeverOn = 84, LeverOnWall,
+    StoneButton = 89, StoneButtonWall,
+    StoneButtonPressed = 94, StoneButtonPressedWall,
     Repeater = 99,
 }

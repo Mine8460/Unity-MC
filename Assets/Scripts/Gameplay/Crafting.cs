@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using UnityEngine;
 
 // Recettes d'artisanat, comme Minecraft : une FORME dans la grille. Elle peut être placée n'importe où dans la
 // grille, et aussi en miroir (gauche-droite). Une recette de 3 de large ou de haut demande l'établi (grille 3 x 3).
@@ -38,6 +39,9 @@ public static class Crafting
         Shaped(BlockType.Torch, 4, new[] { "C", "S" }, K('C', ItemType.Coal), K('S', ItemType.Stick));
         Shaped(BlockType.StoneSlab, 6, new[] { "SSS" }, K('S', stone));
 
+        // Four : un anneau de pierre autour d'un trou
+        Shaped((BlockType)FurnaceIds.Block, 1, new[] { "SSS", "S S", "SSS" }, K('S', stone));
+
         // Redstone
         ItemType dust = ItemType.RedstoneDust;
         ItemType redstoneTorch = ItemDatabase.FromBlock((BlockType)Redstone.TorchLit);
@@ -59,6 +63,28 @@ public static class Crafting
             Shaped(Offset(ItemType.WoodenAxe, m),     1, new[] { "MM", "MS", " S" }, M, S);
             Shaped(Offset(ItemType.WoodenShovel, m),  1, new[] { "M", "S", "S" }, M, S);
         }
+
+        LoadFiles();
+    }
+
+    public const string ResourcesFolder = "Recipes";
+
+    // Recettes des fichiers (Assets/Resources/Recipes/*.asset). Une recette-fichier REMPLACE les recettes du code
+    // qui donnent le même objet : on peut donc modifier une recette existante, ou en ajouter de nouvelles.
+    static void LoadFiles()
+    {
+        var fromFiles = new List<Recipe>();
+        foreach (RecipeDefinition d in Resources.LoadAll<RecipeDefinition>(ResourcesFolder))
+        {
+            if (d.TryBuild(out Recipe r, out string error)) fromFiles.Add(r);
+            else Debug.LogWarning($"Recette « {d.name} » ignorée : {error}.", d);
+        }
+        if (fromFiles.Count == 0) return;
+
+        var replaced = new HashSet<ItemType>();
+        foreach (Recipe r in fromFiles) replaced.Add(r.result.type);
+        recipes.RemoveAll(r => replaced.Contains(r.result.type));
+        recipes.AddRange(fromFiles);
     }
 
     static ItemType Offset(ItemType first, int m) => (ItemType)((int)first + m);

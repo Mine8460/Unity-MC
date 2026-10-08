@@ -139,6 +139,23 @@ public partial class World : IBlockView
         return SetBlockAndState(p.x, p.y, p.z, type, state, true);
     }
 
+    // Orientation RÉELLE d'une torche / d'un levier / d'un bouton (0 = sol, 1 = mur nord, 2 = sud, 3 = est, 4 = ouest).
+    // Un composant dont le fichier a Orientation = Horizontal et un numéro « mural » (orient du numéro > 0) est tourné
+    // par son ÉTAT (face vers l'extérieur du mur : 0 = +Z, 1 = +X, 2 = -Z, 3 = -X) ; le mur est donc à l'opposé.
+    // Sinon on garde l'orientation du numéro (blocs du code, une orientation par numéro).
+    int RsOrient(BlockType t, int idOrient, byte state)
+    {
+        if (idOrient == 0) return 0;
+        if (BlockDatabase.GetRef(t).orientation != Orientation.Horizontal) return idOrient;
+        switch (state & 3)
+        {
+            case 0: return 2;
+            case 1: return 4;
+            case 2: return 1;
+            default: return 3;
+        }
+    }
+
     // ------------------------------------------------------------------
     // Puissance
     // ------------------------------------------------------------------
@@ -151,7 +168,7 @@ public partial class World : IBlockView
         if (Redstone.IsButton(t, out bool pressed, out _)) return pressed ? Redstone.MaxPower : 0;
 
         if (Redstone.IsTorch(t, out bool lit, out int orient))
-            return lit && Redstone.AttachDirs[orient] != toRecv ? Redstone.MaxPower : 0; // jamais vers le bloc qui la porte
+            return lit && Redstone.AttachDirs[RsOrient(t, orient, state)] != toRecv ? Redstone.MaxPower : 0; // jamais vers le bloc qui la porte
 
         if (Redstone.IsRepeater(t))
             return Redstone.RepeaterPowered(state) && Redstone.Horizontal[Redstone.RepeaterFacing(state)] == toRecv ? Redstone.MaxPower : 0;
@@ -164,10 +181,10 @@ public partial class World : IBlockView
     int StrongPower(Vector3Int m, BlockType t, byte state, Vector3Int toRecv, bool wiresGive)
     {
         if (Redstone.IsLever(t, out bool on, out int leverOrient))
-            return on && Redstone.AttachDirs[leverOrient] == toRecv ? Redstone.MaxPower : 0;   // le bloc où il est collé
+            return on && Redstone.AttachDirs[RsOrient(t, leverOrient, state)] == toRecv ? Redstone.MaxPower : 0;   // le bloc où il est collé
 
         if (Redstone.IsButton(t, out bool pressed, out int buttonOrient))
-            return pressed && Redstone.AttachDirs[buttonOrient] == toRecv ? Redstone.MaxPower : 0;
+            return pressed && Redstone.AttachDirs[RsOrient(t, buttonOrient, state)] == toRecv ? Redstone.MaxPower : 0;
 
         if (Redstone.IsTorch(t, out bool lit, out _))
             return lit && toRecv.y > 0 ? Redstone.MaxPower : 0;                                 // le bloc au-dessus
@@ -263,7 +280,7 @@ public partial class World : IBlockView
         else if (Redstone.IsTorch(t, out bool lit, out int orient))
         {
             // Allumée et son bloc est alimenté, ou éteinte et il ne l'est plus : elle va changer (en 2 tics)
-            if (lit == TorchShouldBeOff(p, orient)) ScheduleRedstone(p, 2);
+            if (lit == TorchShouldBeOff(p, RsOrient(t, orient, GetState(p.x, p.y, p.z)))) ScheduleRedstone(p, 2);
         }
         else if (Redstone.IsRepeater(t))
         {
@@ -295,9 +312,10 @@ public partial class World : IBlockView
 
         if (Redstone.IsTorch(t, out bool lit, out int orient))
         {
-            bool off = TorchShouldBeOff(p, orient);
-            if (lit && off) SetRs(p, Redstone.Torch(false, orient), 0);
-            else if (!lit && !off) SetRs(p, Redstone.Torch(true, orient), 0);
+            byte keep = GetState(p.x, p.y, p.z); // l'orientation (état) est conservée
+            bool off = TorchShouldBeOff(p, RsOrient(t, orient, keep));
+            if (lit && off) SetRs(p, Redstone.Torch(false, orient), keep);
+            else if (!lit && !off) SetRs(p, Redstone.Torch(true, orient), keep);
         }
         else if (Redstone.IsRepeater(t))
         {
@@ -322,7 +340,7 @@ public partial class World : IBlockView
         }
         else if (Redstone.IsButton(t, out bool pressed, out int buttonOrient) && pressed)
         {
-            SetRs(p, Redstone.Button(false, buttonOrient), 0);
+            SetRs(p, Redstone.Button(false, buttonOrient), GetState(p.x, p.y, p.z));
         }
     }
 
@@ -413,19 +431,26 @@ public partial class World : IBlockView
 
     // Clic droit sur un levier (il bascule), un bouton (il s'enfonce une seconde) ou un répéteur (son délai
     // passe à l'étape suivante). Retourne true si le bloc visé est l'un d'eux.
+    // Le bloc en p réagit-il au clic droit ? (sans rien changer : sert à ne pas poser de bloc contre lui)
+    public bool IsInteractive(Vector3Int p)
+    {
+        BlockType t = GetBlock(p.x, p.y, p.z);
+        return Redstone.IsLever(t, out _, out _) || Redstone.IsButton(t, out _, out _) || Redstone.IsRepeater(t);
+    }
+
     public bool TryInteract(Vector3Int p)
     {
         BlockType t = GetBlock(p.x, p.y, p.z);
 
         if (Redstone.IsLever(t, out bool on, out int leverOrient))
         {
-            SetRs(p, Redstone.Lever(!on, leverOrient), 0);
+            SetRs(p, Redstone.Lever(!on, leverOrient), GetState(p.x, p.y, p.z)); // l'orientation est conservée
         }
         else if (Redstone.IsButton(t, out bool pressed, out int buttonOrient))
         {
             if (!pressed)
             {
-                SetRs(p, Redstone.Button(true, buttonOrient), 0);
+                SetRs(p, Redstone.Button(true, buttonOrient), GetState(p.x, p.y, p.z));
                 ScheduleRedstone(p, 20); // reste enfoncé 1 seconde
             }
         }

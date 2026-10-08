@@ -27,7 +27,10 @@ public static class VoxelCollision
         for (int y = y0; y <= y1; y++)
         for (int z = z0; z <= z1; z++)
         {
-            Box[] boxes = BlockDatabase.Get(world.GetBlock(x, y, z)).collisionBoxes;
+            BlockType blockType = world.GetBlock(x, y, z);
+            Box[] boxes = BlockDatabase.Get(blockType).orientation == Orientation.None
+                ? BlockDatabase.Get(blockType).collisionBoxes
+                : BlockDatabase.CollisionBoxes(blockType, world.GetState(x, y, z));
             if (boxes == null) continue;
 
             var cell = new Vector3(x, y, z);

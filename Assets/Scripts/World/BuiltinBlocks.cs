@@ -143,7 +143,37 @@ public static class BuiltinBlocks
             rep.dropItem = ItemType.Repeater;
         }
 
+        // --- Four : un cube dont l'AVANT (+Z) porte l'ouverture ; tourné vers le joueur à la pose ---
+        BlockDefinition furnace = b.Add(FurnaceIds.Block, "Four");
+        if (furnace != null)
+        {
+            SetupFurnace(furnace, tex.FurnaceSide, tex.FurnaceTop, tex.FurnaceFrontOff);
+            furnace.emission = 0;
+        }
+        BlockDefinition furnaceLit = b.Add(FurnaceIds.Lit, "Four allumé");
+        if (furnaceLit != null)
+        {
+            SetupFurnace(furnaceLit, tex.FurnaceSide, tex.FurnaceTop, tex.FurnaceFrontOn);
+            furnaceLit.emission = 13;
+            furnaceLit.dropBlock = furnace;
+        }
+
         return b.list.ToArray();
+    }
+
+    static void SetupFurnace(BlockDefinition d, Texture2D side, Texture2D top, Texture2D front)
+    {
+        d.shape = BlockShape.Model;
+        d.orientation = Orientation.Horizontal;
+        d.side.albedo = side;
+        d.top.albedo = top;
+        d.bottom.albedo = top;
+        d.boxes = new[] { new ModelBox { from = Vector3.zero, to = new Vector3(16, 16, 16), top = top, bottom = top, side = side, front = front } };
+        d.opaque = true;
+        d.collidable = true;
+        d.breakTime = 3.5f;
+        d.tool = ToolKind.Pickaxe;
+        d.harvestLevel = 1;
     }
 
     sealed class Builder
@@ -249,6 +279,8 @@ public static class BuiltinBlocks
         public readonly Texture2D Ore, RedstoneBlock, Dust, LampOff, LampOn, LeverBase, LeverHandle, Button,
                                   RepeaterTop, RepeaterSide, RepeaterTorch;
 
+        public readonly Texture2D FurnaceSide, FurnaceTop, FurnaceFrontOff, FurnaceFrontOn;
+
         readonly Texture2D torchFloorLit, torchFloorUnlit, torchWallLit, torchWallUnlit;
 
         public Textures()
@@ -270,6 +302,11 @@ public static class BuiltinBlocks
             RepeaterSide = Make("repeater_side", Stone);
             // Les torches du répéteur : une texture uniforme (elles sont teintées par la puissance, comme le fil)
             RepeaterTorch = Make("repeater_torch", (x, y) => Shade(new Color32(205, 205, 205, 255), Noise(x, y, 13), 0.2f));
+
+            FurnaceSide = Make("furnace_side", (x, y) => Shade(new Color32(112, 112, 112, 255), Noise(x, y, 21), 0.2f));
+            FurnaceTop = Make("furnace_top", (x, y) => Shade(new Color32(98, 98, 98, 255), Noise(x, y, 23), 0.15f));
+            FurnaceFrontOff = Make("furnace_front", (x, y) => FurnaceFront(x, y, false));
+            FurnaceFrontOn = Make("furnace_front_on", (x, y) => FurnaceFront(x, y, true));
 
             torchFloorLit = Make("redstone_torch_lit", (x, y) => TorchPixel(y, true, 8, 9));
             torchFloorUnlit = Make("redstone_torch_unlit", (x, y) => TorchPixel(y, false, 8, 9));
@@ -331,6 +368,26 @@ public static class BuiltinBlocks
             for (int i = 0; i < specks.GetLength(0); i++)
                 if (specks[i, 0] == x && specks[i, 1] == y) return true;
             return false;
+        }
+
+        // Face avant du four : de la pierre, avec une ouverture en bas (sombre, ou pleine de braises) et une grille en haut
+        static Color32 FurnaceFront(int x, int y, bool lit)
+        {
+            // y = 0 en bas de l'image
+            bool opening = x >= 3 && x <= 12 && y >= 2 && y <= 8;
+            if (opening)
+            {
+                if (!lit) return Shade(new Color32(28, 28, 30, 255), Noise(x, y, 25), 0.3f);
+                float glow = 1f - (y - 2) / 8f;                         // plus vif en bas
+                var c = Color32.Lerp(new Color32(255, 210, 90, 255), new Color32(210, 70, 20, 255), 1f - glow);
+                return Shade(c, Noise(x, y, 27), 0.18f);
+            }
+
+            bool vent = x >= 5 && x <= 10 && y >= 11 && y <= 13 && (x + y) % 2 == 0;
+            if (vent) return new Color32(38, 38, 40, 255);
+
+            bool frame = x >= 2 && x <= 13 && y >= 1 && y <= 9;       // cadre autour de l'ouverture
+            return Shade(frame ? new Color32(86, 86, 86, 255) : new Color32(112, 112, 112, 255), Noise(x, y, 29), 0.2f);
         }
 
         static Color32 Lamp(int x, int y, bool lit)

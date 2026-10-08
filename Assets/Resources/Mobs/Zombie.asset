@@ -1,0 +1,40 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 07ca90b4d526a8d49ab5412bc125b677, type: 3}
+  m_Name: Zombie
+  m_EditorClassIdentifier: Assembly-CSharp::MobDefinition
+  displayName: Zombie
+  behavior: 0
+  health: 20
+  speed: 3
+  width: 0.6
+  height: 1.95
+  jumpSpeed: 8
+  attackDamage: 3
+  attackRange: 1.3
+  attackCooldown: 1
+  followRange: 35
+  burnInDaylight: 1
+  spawnWeight: 10
+  maxCount: 30
+  groupMin: 1
+  groupMax: 4
+  minLight: 0
+  maxLight: 0
+  spawnOnBlocks: []
+  skin: {fileID: 0}
+  textureSize: {x: 64, y: 32}
+  parts: []
+  modelScale: 1
+  modelYawOffset: 180
+  prefab: {fileID: 7078394573055125492, guid: 2100156b1340dd44daed597d1cee193c, type: 3}
+  drops: []

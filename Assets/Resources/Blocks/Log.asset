@@ -36,6 +36,8 @@ MonoBehaviour:
   blockbenchModel: {fileID: 0}
   blockbenchTextures: []
   blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 2
   opaque: 1
   collidable: 1
   cullSameType: 0

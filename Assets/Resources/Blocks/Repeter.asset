@@ -1,0 +1,58 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: Repeter
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 99
+  displayName: Repeater
+  shape: 5
+  side:
+    albedo: {fileID: 2800000, guid: d245d0c21a3a2544b8d21000dd5efc15, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  top:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  bottom:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 0}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 1
+  opaque: 0
+  collidable: 1
+  cullSameType: 0
+  replaceable: 0
+  isSoil: 0
+  gravity: 0
+  support: 1
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 1
+  breakTime: 0.5
+  tool: 1
+  harvestLevel: 0
+  dropsNothing: 0
+  dropBlock: {fileID: 0}
+  dropItem: 277
+  dropCount: 0
+  dropCountRandom: 0

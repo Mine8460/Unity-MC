@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
   m_Name: CoalOre
   m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
-  id: 21
+  id: 18
   displayName: Coal Ore
   shape: 0
   side:
@@ -36,6 +36,8 @@ MonoBehaviour:
   blockbenchModel: {fileID: 0}
   blockbenchTextures: []
   blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 0
   opaque: 1
   collidable: 1
   cullSameType: 0
@@ -53,3 +55,4 @@ MonoBehaviour:
   dropBlock: {fileID: 0}
   dropItem: 256
   dropCount: 0
+  dropCountRandom: 0

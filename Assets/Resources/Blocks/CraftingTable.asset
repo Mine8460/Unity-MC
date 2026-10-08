@@ -12,30 +12,52 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
   m_Name: CraftingTable
   m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
-  id: 26
+  id: 23
   displayName: Crafting Table
   shape: 0
   side:
-    albedo: {fileID: 2800000, guid: b55e1cd381fcc42448e19fd9304cd1c1, type: 3}
-    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    albedo: {fileID: 2800000, guid: b5539904245d58f45b8628c5a0b3493b, type: 3}
+    height: {fileID: 2800000, guid: c40efa89b9e7a644d93892c348b7e9b3, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
   top:
-    albedo: {fileID: 2800000, guid: 00fea72812cb00a4f87394c4cc1e577a, type: 3}
+    albedo: {fileID: 2800000, guid: 3cd56a1f1fb6bdc478e2c5a98663e2f0, type: 3}
     height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
   bottom:
-    albedo: {fileID: 2800000, guid: 00fea72812cb00a4f87394c4cc1e577a, type: 3}
-    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    albedo: {fileID: 2800000, guid: b55e1cd381fcc42448e19fd9304cd1c1, type: 3}
+    height: {fileID: 2800000, guid: e943fd983d0afab4cafba9791a0c8c5c, type: 3}
     metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
     emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  front:
+    albedo: {fileID: 2800000, guid: 7c5ed80cad44e7c43acc685684219bb8, type: 3}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  back:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  right:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  left:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
   lightMode: 0
   randomOffset: 0
   boxes: []
   blockbenchModel: {fileID: 0}
   blockbenchTextures: []
   blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 1
   opaque: 1
   collidable: 1
   cullSameType: 0
@@ -53,3 +75,4 @@ MonoBehaviour:
   dropBlock: {fileID: 0}
   dropItem: 0
   dropCount: 0
+  dropCountRandom: 0

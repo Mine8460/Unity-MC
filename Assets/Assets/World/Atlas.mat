@@ -109,12 +109,13 @@ Material:
     - _Ambient: 0.673
     - _AtlasTiles: 8
     - _Blend: 0
+    - _BlendCutoff: 0.004
     - _BlendModePreserveSpecular: 1
     - _BumpScale: 1
     - _ClearCoatMask: 0
     - _ClearCoatSmoothness: 0
     - _Cull: 2
-    - _Cutoff: 0.047
+    - _Cutoff: 0.085
     - _DetailAlbedoMapScale: 1
     - _DetailNormalMapScale: 1
     - _DstBlend: 0
@@ -148,6 +149,7 @@ Material:
     - _SrcBlend: 1
     - _SrcBlendAlpha: 1
     - _Surface: 0
+    - _Translucent: 0
     - _UseEmission: 1
     - _UseHeightMap: 1
     - _UseMetallicMap: 0

@@ -68,7 +68,6 @@ public enum SupportRule : byte
     SolidBelow,     // un cube plein et solide sous lui (torche)
     SoilBelow,      // de l'herbe ou de la terre sous lui (plantes)
     SolidAttached,  // un cube plein et solide dans la direction attachDir (torche murale)
-    SolidBehind,
     OpaqueBelow,    // un cube plein et OPAQUE sous lui (poussière de redstone, répéteur)
 }
 
@@ -97,7 +96,10 @@ public struct BlockInfo
     public byte dropCountRandom;    // en plus : de 0 à ce nombre d'objets, au hasard (minerai de redstone : 4 + 0 à 1)
     public byte flushMask;          // faces (bit 0 = haut, 1 = bas, 2 = +Z, 3 = -Z, 4 = +X, 5 = -X) contre le bord du bloc
     public LightMode lightMode; // éclairage par le shader (Pixel par défaut)
-    public int tileTop, tileBottom, tileSide;   // tuiles de l'atlas (cubes et plantes)
+    public Orientation orientation; // le bloc peut être tourné à la pose (état du bloc)
+    public BlockType wallVariant;   // bloc posé à sa place contre un mur (Air = aucun)
+    public int tileTop, tileBottom, tileSide;
+    public int[] faceTiles;   // 6 tuiles : 0 haut, 1 bas, 2 +Z avant, 3 -Z arrière, 4 +X, 5 -X   // tuiles de l'atlas (cubes et plantes)
     public Element[] elements;                  // forme « Model » en boîtes
     public ModelQuad[] quads;                   // modèles importés (Blockbench)
     public Box[] collisionBoxes;                // null = aucune collision
@@ -116,6 +118,10 @@ public static class BlockDatabase
 
     // Atlas assemblé au lancement : N x N tuiles de TilePixels pixels
     public static int AtlasTilesPerRow { get; private set; } = 1;
+    static bool[] translucentTiles = new bool[0];
+    public static bool HasTranslucentTiles { get; private set; }
+    // Tuile avec des pixels partiellement transparents (ni opaques ni totalement transparents)
+    public static bool IsTranslucentTile(int tile) => tile >= 0 && tile < translucentTiles.Length && translucentTiles[tile];
     public static int TilePixels { get; private set; } = 16;
     public static Texture2D Atlas { get; private set; }
     public static Texture2D HeightAtlas { get; private set; }     // null si aucun bloc n'a de height map
@@ -211,6 +217,9 @@ public static class BlockDatabase
         MetallicAtlas = atlas.metallic;
         EmissionAtlas = atlas.emission;
         AtlasTilesPerRow = atlas.tilesPerRow;
+        translucentTiles = atlas.translucent ?? new bool[0];
+        HasTranslucentTiles = false;
+        foreach (bool tr in translucentTiles) HasTranslucentTiles |= tr;
         TilePixels = atlas.tilePixels;
 
         // 3) Infos de chaque bloc
@@ -223,7 +232,17 @@ public static class BlockDatabase
                 continue;
             }
             infos[id] = ToInfo(def, atlas);
+            for (int k = 0; k < 8; k++) { rotatedCollision[id * 8 + k] = null; rotatedSelection[id * 8 + k] = null; }
             names[id] = string.IsNullOrEmpty(def.displayName) ? def.name : def.displayName;
+        }
+
+        // Une variante murale lâche le bloc du sol (sauf si son fichier dit autre chose)
+        for (int id = 1; id < 256; id++)
+        {
+            BlockType wall = infos[id].wallVariant;
+            if (wall == BlockType.Air) continue;
+            if (infos[(int)wall].dropOverride == BlockType.Air && infos[(int)wall].dropItem == ItemType.None)
+                infos[(int)wall].dropOverride = (BlockType)id;
         }
 
         Debug.Log($"BlockDatabase : {defs.Length} bloc(s) chargé(s) + {builtin.Length} intégré(s) (redstone), atlas de {atlas.tilesPerRow} x {atlas.tilesPerRow} tuiles " +
@@ -236,8 +255,18 @@ public static class BlockDatabase
         int top = d.top.albedo != null ? atlas.TileOf(d.top.albedo) : side;
         int bottom = d.bottom.albedo != null ? atlas.TileOf(d.bottom.albedo) : side;
 
+        int[] faceTiles =
+        {
+            top, bottom,
+            d.front != null && d.front.albedo != null ? atlas.TileOf(d.front.albedo) : side,
+            d.back != null && d.back.albedo != null ? atlas.TileOf(d.back.albedo) : side,
+            d.right != null && d.right.albedo != null ? atlas.TileOf(d.right.albedo) : side,
+            d.left != null && d.left.albedo != null ? atlas.TileOf(d.left.albedo) : side,
+        };
+
         var info = new BlockInfo
         {
+            faceTiles = faceTiles,
             shape = d.shape,
             hasMesh = true,
             opaque = d.shape == BlockShape.Cube && d.opaque,  // seul un cube peut cacher ses voisins
@@ -260,6 +289,8 @@ public static class BlockDatabase
             dropCount = (byte)Mathf.Clamp(d.dropCount, 0, 64),
             dropCountRandom = (byte)Mathf.Clamp(d.dropCountRandom, 0, 64),
             lightMode = d.lightMode,
+            wallVariant = d.wallVariant != null ? (BlockType)d.wallVariant.id : BlockType.Air,
+            orientation = d.shape == BlockShape.Cube || d.shape == BlockShape.Model ? d.orientation : Orientation.None,
             tileTop = top, tileBottom = bottom, tileSide = side,
         };
 
@@ -316,7 +347,12 @@ public static class BlockDatabase
             int t = b.top != null ? atlas.TileOf(b.top) : top;
             int bo = b.bottom != null ? atlas.TileOf(b.bottom) : bottom;
             int s = b.side != null ? atlas.TileOf(b.side) : side;
-            elements[i] = new Element(min, max, new[] { t, bo, s, s, s, s });
+            int[] ft = info.faceTiles;
+            int fr = b.front != null ? atlas.TileOf(b.front) : (b.side == null && ft != null ? ft[2] : s);
+            int ba = b.back != null ? atlas.TileOf(b.back) : (b.side == null && ft != null ? ft[3] : s);
+            int ri = b.right != null ? atlas.TileOf(b.right) : (b.side == null && ft != null ? ft[4] : s);
+            int le = b.left != null ? atlas.TileOf(b.left) : (b.side == null && ft != null ? ft[5] : s);
+            elements[i] = new Element(min, max, new[] { t, bo, fr, ba, ri, le });
             boxes[i] = new Box(min, max);
         }
 
@@ -401,6 +437,28 @@ public static class BlockDatabase
 
     public static BlockInfo Get(BlockType type) => infos[(int)type];
 
+    // Boîtes de collision / de visée d'un bloc selon son orientation (état). Mises en cache.
+    static readonly Box[][] rotatedCollision = new Box[256 * 8][];
+    static readonly Box[][] rotatedSelection = new Box[256 * 8][];
+
+    public static Box[] CollisionBoxes(BlockType type, byte state)
+    {
+        ref readonly BlockInfo info = ref infos[(int)type];
+        if (info.orientation == Orientation.None || state == 0 || info.collisionBoxes == null) return info.collisionBoxes;
+
+        int k = (int)type * 8 + (state & 7);
+        return rotatedCollision[k] ?? (rotatedCollision[k] = BlockOrientation.RotateBoxes(info.collisionBoxes, info.orientation, BlockOrientation.Clamp(info.orientation, state)));
+    }
+
+    public static Box[] SelectionBoxes(BlockType type, byte state)
+    {
+        ref readonly BlockInfo info = ref infos[(int)type];
+        if (info.orientation == Orientation.None || state == 0 || info.selectionBoxes == null) return info.selectionBoxes;
+
+        int k = (int)type * 8 + (state & 7);
+        return rotatedSelection[k] ?? (rotatedSelection[k] = BlockOrientation.RotateBoxes(info.selectionBoxes, info.orientation, BlockOrientation.Clamp(info.orientation, state)));
+    }
+
     // Comme Get, mais SANS copier la structure (à privilégier dans les boucles chaudes)
     public static ref readonly BlockInfo GetRef(BlockType type) => ref infos[(int)type];
 
@@ -432,6 +490,7 @@ public static class BlockDatabase
     public static int GetTile(BlockType type, int face)
     {
         ref readonly BlockInfo info = ref infos[(int)type];
+        if (info.faceTiles != null) return info.faceTiles[face];
         if (face == 0) return info.tileTop;
         if (face == 1) return info.tileBottom;
         return info.tileSide;
@@ -508,14 +567,15 @@ public static class BlockDatabase
         public Texture2D albedo, height, metallic, emission;
         public int tilesPerRow = 1, tilePixels = 16;
         public int TileCount => albedos.Count;
+        public bool[] translucent;
 
         public void Collect(BlockDefinition d)
         {
-            Add(d.side); Add(d.top); Add(d.bottom);
+            Add(d.side); Add(d.top); Add(d.bottom); Add(d.front); Add(d.back); Add(d.right); Add(d.left);
             foreach (ModelBox b in d.boxes ?? new ModelBox[0])
             {
                 if (b == null) continue;
-                Add(b.top); Add(b.side); Add(b.bottom);
+                Add(b.top); Add(b.side); Add(b.bottom); Add(b.front); Add(b.back); Add(b.right); Add(b.left);
             }
             foreach (NamedTexture nt in d.blockbenchTextures ?? new NamedTexture[0])
                 if (nt != null) Add(nt.texture);
@@ -586,6 +646,13 @@ public static class BlockDatabase
             {
                 Color32[] src = tile == 0 && missing ? MissingTile(tilePixels) : Read(source(tile), tilePixels, linear);
                 if (src == null) continue;
+
+                if (missing)
+                {
+                    if (translucent == null || translucent.Length != albedos.Count) translucent = new bool[albedos.Count];
+                    for (int k = 0; k < src.Length; k++)
+                        if (src[k].a > 6 && src[k].a < 250) { translucent[tile] = true; break; }
+                }
 
                 int col = tile % tilesPerRow, row = tile / tilesPerRow;
                 int ox = col * tilePixels;

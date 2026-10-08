@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6a72764bbe22404f86e8d8746d38388, type: 3}
+  m_Name: Recette_9
+  m_EditorClassIdentifier: Assembly-CSharp::RecipeDefinition
+  pattern:
+  - AAA
+  ingredients:
+  - letter: A
+    item:
+      item: {fileID: 0}
+      block: {fileID: 11400000, guid: bc2ba0080945dd74e89d60cde3f8c03c, type: 2}
+      builtin: 0
+  result:
+    item: {fileID: 0}
+    block: {fileID: 11400000, guid: 410fe5cd3a14ef040af4a737f3d4fa38, type: 2}
+    builtin: 0
+  resultCount: 6

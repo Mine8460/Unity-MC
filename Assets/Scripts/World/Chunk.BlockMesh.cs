@@ -61,7 +61,21 @@ public partial class Chunk
 
         var mesh = new Mesh { name = "Block " + type };
         mesh.SetVertices(verts);
-        mesh.SetTriangles(tris, 0);
+        // Faces à transparence partielle : sous-mesh 1 (matériau translucide)
+        var opaqueTris = new List<int>();
+        var glassTris = new List<int>();
+        int perRow = BlockDatabase.AtlasTilesPerRow;
+        for (int i = 0; i + 2 < tris.Count; i += 3)
+        {
+            Vector2 ua = uvs[tris[i]], ub = uvs[tris[i + 1]], uc = uvs[tris[i + 2]];
+            int col = Mathf.Clamp((int)((ua.x + ub.x + uc.x) / 3f * perRow), 0, perRow - 1);
+            int row = Mathf.Clamp((int)((1f - (ua.y + ub.y + uc.y) / 3f) * perRow), 0, perRow - 1);
+            List<int> dst = BlockDatabase.IsTranslucentTile(row * perRow + col) ? glassTris : opaqueTris;
+            dst.Add(tris[i]); dst.Add(tris[i + 1]); dst.Add(tris[i + 2]);
+        }
+        mesh.subMeshCount = 2;
+        mesh.SetTriangles(opaqueTris, 0);
+        mesh.SetTriangles(glassTris, 1);
         mesh.SetNormals(normals);
         mesh.SetUVs(0, uvs);
         // Pleine lumière du ciel, aucune lumière de torche : le bloc en chute n'a pas de case où lire sa lumière.

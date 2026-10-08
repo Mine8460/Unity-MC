@@ -48,7 +48,7 @@ public partial class Chunk : MonoBehaviour
     bool hasCollider;
     int colliderTriangles;
 
-    public void Init(ChunkData data, Material material, Material waterMaterial)
+    public void Init(ChunkData data, Material material, Material waterMaterial, Material translucentMaterial = null)
     {
         Data = data;
 
@@ -57,9 +57,7 @@ public partial class Chunk : MonoBehaviour
         meshFilter = GetComponent<MeshFilter>();
         meshCollider = GetComponent<MeshCollider>();
         // Deux matériaux : les blocs (sous-mesh 0) et l'eau, transparente (sous-mesh 1)
-        GetComponent<MeshRenderer>().sharedMaterials = waterMaterial != null
-            ? new[] { material, waterMaterial }
-            : new[] { material };
+        GetComponent<MeshRenderer>().sharedMaterials = new[] { material, waterMaterial != null ? waterMaterial : material, translucentMaterial != null ? translucentMaterial : material };
 
         mesh = new Mesh { name = $"Chunk {data.coord.x},{data.coord.y}" };
         mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
@@ -111,9 +109,10 @@ public partial class Chunk : MonoBehaviour
     {
         mesh.Clear();
         mesh.SetVertices(b.vertices);
-        mesh.subMeshCount = 2;
+        mesh.subMeshCount = 3;
         mesh.SetTriangles(b.triangles, 0);
         mesh.SetTriangles(b.waterTriangles, 1);
+        mesh.SetTriangles(b.translucentTriangles, 2);
         mesh.SetNormals(b.normals);
         mesh.SetUVs(0, b.uvs);
         mesh.SetUVs(1, b.flow); // sens du courant de l'eau (animation de sa texture)

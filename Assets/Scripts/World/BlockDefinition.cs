@@ -23,6 +23,14 @@ public class BlockDefinition : ScriptableObject
     public FaceTextures top = new FaceTextures();
     [Tooltip("Vide = celles des côtés")]
     public FaceTextures bottom = new FaceTextures();
+    [Tooltip("Face AVANT (+Z à la création, tourne avec le bloc : four, table de craft). Vide = côtés")]
+    public FaceTextures front = new FaceTextures();
+    [Tooltip("Face ARRIÈRE (-Z). Vide = côtés")]
+    public FaceTextures back = new FaceTextures();
+    [Tooltip("Face DROITE (+X). Vide = côtés")]
+    public FaceTextures right = new FaceTextures();
+    [Tooltip("Face GAUCHE (-X). Vide = côtés")]
+    public FaceTextures left = new FaceTextures();
     [Tooltip("Éclairage par le shader : Pixel (normal), Block (plantes), FullBright (torche : ni ombre ni lumière)")]
     public LightMode lightMode = LightMode.Pixel;
     [Tooltip("Petit décalage aléatoire selon la position (herbes hautes)")]
@@ -35,6 +43,17 @@ public class BlockDefinition : ScriptableObject
     [Tooltip("Textures du modèle Blockbench : le nom écrit dans le .json (ex. « anvil ») et l'image correspondante")]
     public NamedTexture[] blockbenchTextures = new NamedTexture[0];
     public ModelCollision blockbenchCollision = ModelCollision.Elements;
+
+    [Header("Variante murale (torche, levier, bouton...)")]
+    [Tooltip("Si rempli : posé CONTRE UN MUR, c'est ce bloc-ci qui est posé à la place (la torche reste celle du sol).\n" +
+             "Ce bloc mural doit avoir Orientation = Horizontal et être dessiné collé au mur SUD (côté -Z), penchant vers le nord (+Z), " +
+             "avec Support = SolidAttached et Attach Dir = (0, 0, -1). Il est tourné tout seul vers les 4 murs et lâche le bloc du sol.")]
+    public BlockDefinition wallVariant;
+
+    [Header("Orientation (Cube et Model)")]
+    [Tooltip("None : jamais tourné.\nHorizontal : 4 sens selon où regarde le joueur ; dessine l'AVANT du bloc vers +Z (nord).\n" +
+             "Axis : 3 axes selon la face visée (bûche) ; dessine le bloc debout.\nFacing : 6 sens ; le HAUT dessiné pointe vers la face visée (torche murale).")]
+    public Orientation orientation = Orientation.None;
 
     [Header("Physique")]
     [Tooltip("Cache les faces des blocs voisins et bloque la lumière (cubes pleins)")]
@@ -104,6 +123,14 @@ public class ModelBox
     public Texture2D top;
     [Tooltip("Vide = texture des côtés du bloc")]
     public Texture2D side;
+    [Tooltip("Face AVANT du bloc (côté +Z, nord), pour un bloc tourné à la pose (four, coffre). Vide = texture des côtés.")]
+    public Texture2D front;
+    [Tooltip("Face ARRIÈRE (-Z). Vide = texture des côtés.")]
+    public Texture2D back;
+    [Tooltip("Face DROITE (+X). Vide = texture des côtés.")]
+    public Texture2D right;
+    [Tooltip("Face GAUCHE (-X). Vide = texture des côtés.")]
+    public Texture2D left;
     [Tooltip("Vide = texture du dessous du bloc")]
     public Texture2D bottom;
 }

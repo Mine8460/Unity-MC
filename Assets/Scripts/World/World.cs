@@ -21,6 +21,7 @@ public partial class World : MonoBehaviour
     [SerializeField] Material chunkMaterial;
     [Tooltip("Matériau de l'eau (shader Voxel/Water, même atlas que les blocs)")]
     [SerializeField] Material waterMaterial;
+    Material translucentMaterial;   // copie de chunkMaterial avec mélange alpha (créée au lancement)
     [Tooltip("Smooth lighting façon Minecraft : lumière lissée et ombre douce dans les coins (pris en compte au chargement)")]
     [SerializeField] bool smoothLighting = true;
     [SerializeField] Transform player;
@@ -176,6 +177,7 @@ public partial class World : MonoBehaviour
         ProcessBlockUpdates();
         ProcessFluids(Time.deltaTime);
         ProcessRedstone(Time.deltaTime);
+        TickFurnaces(Time.deltaTime);
 
         if (player == null || workers == null) return;
 
@@ -322,7 +324,7 @@ public partial class World : MonoBehaviour
         go.transform.SetParent(transform);
 
         var chunk = go.AddComponent<Chunk>(); // ajoute aussi MeshFilter / MeshRenderer / MeshCollider
-        chunk.Init(data, chunkMaterial, waterMaterial);
+        chunk.Init(data, chunkMaterial, waterMaterial, translucentMaterial);
         chunk.WantsCollider = InColliderRadius(data.coord, lastCenter);
 
         chunks[data.coord] = chunk;
@@ -658,6 +660,15 @@ public partial class World : MonoBehaviour
             SetFloatIf(chunkMaterial, "_AtlasTiles", BlockDatabase.AtlasTilesPerRow);
             SetFloatIf(chunkMaterial, "_PixelsPerBlock", BlockDatabase.TilePixels);
         }
+        if (chunkMaterial != null)
+        {
+            translucentMaterial = new Material(chunkMaterial) { name = chunkMaterial.name + " (translucide)" };
+            translucentMaterial.SetFloat("_Translucent", 1f);
+            translucentMaterial.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            translucentMaterial.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            translucentMaterial.SetFloat("_ZWrite", 0f);
+            translucentMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
+        }
         if (waterMaterial != null)
         {
             waterMaterial = new Material(waterMaterial) { name = waterMaterial.name + " (atlas)" };
@@ -776,6 +787,8 @@ public partial class World : MonoBehaviour
     // Copie les chunks chargés et modifiés dans savedChunks, puis écrit le fichier si nécessaire
     void SaveAll()
     {
+        SaveFurnaces();
+
         foreach (var kv in chunks)
         {
             if (!kv.Value.IsModified) continue;
@@ -870,6 +883,8 @@ public partial class World : MonoBehaviour
         savedChunks.Clear();
         saveDirty = false;
         if (File.Exists(SavePath)) File.Delete(SavePath);
+        if (File.Exists(FurnacePath)) File.Delete(FurnacePath);
+        furnaces.Clear();
         Debug.Log($"World : sauvegarde supprimée ({SavePath})");
     }
 }

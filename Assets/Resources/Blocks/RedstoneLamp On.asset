@@ -30,12 +30,34 @@ MonoBehaviour:
     height: {fileID: 2800000, guid: f43bbbdd18c7b3a4f8b79bb7cf4120db, type: 3}
     metallic: {fileID: 0}
     emission: {fileID: 0}
+  front:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  back:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  right:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  left:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
   lightMode: 0
   randomOffset: 0
   boxes: []
   blockbenchModel: {fileID: 0}
   blockbenchTextures: []
   blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 0
   opaque: 1
   collidable: 1
   cullSameType: 0

@@ -25,11 +25,11 @@ public partial class World
     }
 
     // Peut-on poser ce bloc ici ? (case libre ou remplaçable, et support valide)
-    public bool CanPlace(int x, int y, int z, BlockType type)
+    public bool CanPlace(int x, int y, int z, BlockType type, byte state = 0)
     {
         if (y < 0 || y >= Chunk.SizeY) return false;
         if (!BlockDatabase.Get(GetBlock(x, y, z)).replaceable) return false;
-        return HasSupport(x, y, z, BlockDatabase.Get(type));
+        return HasSupport(x, y, z, BlockDatabase.Get(type), state);
     }
 
     // À utiliser à la place de SetBlock quand le JOUEUR pose un bloc
@@ -39,20 +39,25 @@ public partial class World
     }
 
     // Le support exigé par le bloc existe-t-il sous lui ?
-    bool HasSupport(int x, int y, int z, BlockInfo info)
+    bool HasSupport(int x, int y, int z, BlockInfo info, byte state = 0)
     {
         BlockInfo below = BlockDatabase.Get(GetBlock(x, y - 1, z));
-        BlockInfo behind = BlockDatabase.Get(GetBlock(x + info.attachDir.x, y + info.attachDir.y, z + info.attachDir.z));
 
         switch (info.support)
         {
             case SupportRule.SolidBelow: return below.shape == BlockShape.Cube && below.collidable;
             case SupportRule.SoilBelow:  return below.isSoil;
-            case SupportRule.SolidBehind: return behind.shape == BlockShape.Cube && behind.collidable;
             case SupportRule.OpaqueBelow: return below.opaque; // cube plein et opaque (le verre ne convient pas)
             case SupportRule.SolidAttached:
             {
                 Vector3Int d = info.attachDir;
+
+                // Bloc tourné (torche murale) : la direction du mur tourne avec lui
+                if (info.orientation != Orientation.None && state != 0)
+                {
+                    Vector3 r = BlockOrientation.RotateDir(info.orientation, BlockOrientation.Clamp(info.orientation, state), new Vector3(d.x, d.y, d.z));
+                    d = new Vector3Int(Mathf.RoundToInt(r.x), Mathf.RoundToInt(r.y), Mathf.RoundToInt(r.z));
+                }
                 BlockInfo wall = BlockDatabase.Get(GetBlock(x + d.x, y + d.y, z + d.z));
                 return wall.shape == BlockShape.Cube && wall.collidable;
             }
@@ -106,7 +111,7 @@ public partial class World
         if (!info.hasMesh) return;
 
         // 1) Le support a disparu : le bloc se casse et lâche son objet (la torche), ou rien (l'herbe haute)
-        if (info.support != SupportRule.None && !HasSupport(x, y, z, info))
+        if (info.support != SupportRule.None && !HasSupport(x, y, z, info, info.orientation != Orientation.None ? GetState(x, y, z) : (byte)0))
         {
             BreakBlock(x, y, z);
             return;
@@ -127,7 +132,7 @@ public partial class World
         go.transform.position = new Vector3(x, y, z);
 
         go.AddComponent<MeshFilter>().sharedMesh = GetFallingMesh(type);
-        go.AddComponent<MeshRenderer>().sharedMaterial = chunkMaterial;
+        go.AddComponent<MeshRenderer>().sharedMaterials = new[] { chunkMaterial, TranslucentMaterial };
 
         var fb = go.AddComponent<FallingBlock>();
         fb.Init(this, type, new Vector3Int(x, y, z));

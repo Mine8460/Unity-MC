@@ -43,6 +43,7 @@ public class BlockOutline : MonoBehaviour
     bool visible;
     Vector3Int block;
     BlockType shownType;
+    byte shownState;
 
     void Awake()
     {
@@ -87,13 +88,15 @@ public class BlockOutline : MonoBehaviour
         BlockInfo info = BlockDatabase.Get(type);
         if (!info.hasMesh) { Hide(); return; }
 
-        if (visible && blockPos == block && type == shownType) return; // rien à refaire
+        byte state = info.orientation != Orientation.None ? world.GetState(blockPos.x, blockPos.y, blockPos.z) : (byte)0;
+        if (visible && blockPos == block && type == shownType && state == shownState) return; // rien à refaire
 
         // Même type de bloc sans décalage aléatoire : la forme est identique, on déplace seulement le contour
-        bool rebuild = !visible || type != shownType || info.randomOffset;
+        bool rebuild = !visible || type != shownType || state != shownState || info.randomOffset;
 
         block = blockPos;
         shownType = type;
+        shownState = state;
         visible = true;
 
         if (rebuild) Rebuild(info);
@@ -117,7 +120,8 @@ public class BlockOutline : MonoBehaviour
     void LateUpdate()
     {
         // Le bloc visé a changé (cassé, remplacé) : on met le contour à jour ou on le cache
-        if (visible && world.GetBlock(block.x, block.y, block.z) != shownType)
+        if (visible && (world.GetBlock(block.x, block.y, block.z) != shownType ||
+                        (shownState != 0 && world.GetState(block.x, block.y, block.z) != shownState)))
             Show(block);
     }
 
@@ -159,6 +163,8 @@ public class BlockOutline : MonoBehaviour
         var tris = new List<int>();
 
         Box[] boxes = GetBoxes(info, block, out Vector3 offset);
+        if (info.orientation != Orientation.None && shownState != 0)
+            boxes = BlockOrientation.RotateBoxes(boxes, info.orientation, BlockOrientation.Clamp(info.orientation, shownState));
         Vector3 pad = Vector3.one * padding;
 
         foreach (Box b in boxes)

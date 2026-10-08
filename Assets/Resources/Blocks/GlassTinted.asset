@@ -1,0 +1,78 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5d0cb7e7c007ac649849636acf9565d9, type: 3}
+  m_Name: GlassTinted
+  m_EditorClassIdentifier: Assembly-CSharp::BlockDefinition
+  id: 24
+  displayName: Tinted Glass
+  shape: 0
+  side:
+    albedo: {fileID: 2800000, guid: c1046b7b1d7cab84e89b89a0a5fd7ab8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  top:
+    albedo: {fileID: 2800000, guid: c1046b7b1d7cab84e89b89a0a5fd7ab8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  bottom:
+    albedo: {fileID: 2800000, guid: c1046b7b1d7cab84e89b89a0a5fd7ab8, type: 3}
+    height: {fileID: 2800000, guid: 5562f35acc775f64bafbf4a3022cbba6, type: 3}
+    metallic: {fileID: 2800000, guid: 3799b29e8832be348bcf9d3392995cd4, type: 3}
+    emission: {fileID: 2800000, guid: c29015ecc8617c9488ebed0cd2c4971f, type: 3}
+  front:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  back:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  right:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  left:
+    albedo: {fileID: 0}
+    height: {fileID: 0}
+    metallic: {fileID: 0}
+    emission: {fileID: 0}
+  lightMode: 0
+  randomOffset: 0
+  boxes: []
+  blockbenchModel: {fileID: 0}
+  blockbenchTextures: []
+  blockbenchCollision: 1
+  wallVariant: {fileID: 0}
+  orientation: 0
+  opaque: 0
+  collidable: 1
+  cullSameType: 1
+  replaceable: 0
+  isSoil: 0
+  gravity: 0
+  support: 0
+  attachDir: {x: 0, y: 0, z: 0}
+  emission: 0
+  lightFilter: 15
+  breakTime: 1
+  tool: 0
+  harvestLevel: 0
+  dropsNothing: 1
+  dropBlock: {fileID: 0}
+  dropItem: 0
+  dropCount: 0
+  dropCountRandom: 0

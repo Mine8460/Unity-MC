@@ -1,0 +1,27 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d6a72764bbe22404f86e8d8746d38388, type: 3}
+  m_Name: Recette_RedstoneDust
+  m_EditorClassIdentifier: Assembly-CSharp::RecipeDefinition
+  pattern:
+  - A
+  ingredients:
+  - letter: A
+    item:
+      item: {fileID: 0}
+      block: {fileID: 11400000, guid: 3bf299f44e898a349a7befe7f189d334, type: 2}
+      builtin: 0
+  result:
+    item: {fileID: 11400000, guid: c1059b1337b207d48832d698b02e68c7, type: 2}
+    block: {fileID: 0}
+    builtin: 0
+  resultCount: 9

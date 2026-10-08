@@ -63,7 +63,7 @@ public static class ItemModel
             // Le mesh d'un bloc va de (0,0,0) à (1,1,1) : on le recentre
             model.transform.localPosition = Vector3.one * (-size * 0.5f);
             model.AddComponent<MeshFilter>().sharedMesh = world.GetBlockMesh(stack.Block);
-            renderer.sharedMaterial = world.ChunkMaterial;
+            renderer.sharedMaterials = new[] { world.ChunkMaterial, world.TranslucentMaterial };
         }
         else
         {

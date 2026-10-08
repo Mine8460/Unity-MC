@@ -14,6 +14,7 @@ public sealed class MeshBuffers
 
     // Triangles de l'eau : mêmes sommets que les blocs, mais dessinés avec le matériau de l'eau (sous-mesh 1)
     public readonly List<int> waterTriangles = new List<int>(4096);
+    public readonly List<int> translucentTriangles = new List<int>(1024);   // faces à transparence partielle (verre...)
     public readonly List<Color32> colors = new List<Color32>(8192);
 
     // Mesh de raycast (casser / poser des blocs) : tout ce qui est visable, même sans collision
@@ -46,6 +47,7 @@ public sealed class MeshBuffers
         uvs.Clear();
         triangles.Clear();
         waterTriangles.Clear();
+        translucentTriangles.Clear();
         colors.Clear();
         colVerts.Clear();
         colTris.Clear();
@@ -376,6 +378,9 @@ public sealed class ChunkMesher
         // Lumière des torches (R) et du ciel (G) de chaque face
         ApplyVertexLight();
 
+        // Faces dont la tuile a de la transparence partielle : sous-mesh à part (mélange alpha)
+        SplitTranslucent();
+
         // Redstone : la puissance (0 à 15) dans le canal bleu, que le shader transforme en teinte
         foreach (Vector3Int w in buf.wirePower)
             for (int i = w.x; i < w.y; i++)
@@ -383,6 +388,24 @@ public sealed class ChunkMesher
                 Color32 prev = buf.colors[i];
                 buf.colors[i] = new Color32(prev.r, prev.g, (byte)(w.z * 17), prev.a);
             }
+    }
+
+    // Orientation du bloc en cours (état du bloc, voir BlockOrientation) ; curState = 0 : tel que dessiné
+    Orientation curOrient;
+    int curState;
+
+    // Face du MONDE où se retrouve la face « dessinée » f du bloc en cours
+    int DstFace(int f) => curState == 0 ? f : BlockOrientation.RotateFace(curOrient, curState, f);
+
+    // Tourne les sommets (et normales) ajoutés depuis `start` selon l'orientation du bloc
+    void RotateAdded(List<Vector3> verts, List<Vector3> norms, int start, Vector3 pos)
+    {
+        for (int i = start; i < verts.Count; i++)
+            verts[i] = pos + BlockOrientation.RotateLocal(curOrient, curState, verts[i] - pos);
+
+        if (norms == null) return;
+        for (int i = start; i < norms.Count; i++)
+            norms[i] = BlockOrientation.RotateDir(curOrient, curState, norms[i]);
     }
 
     void AddBlock(BlockType type, int x, int y, int z)
@@ -395,6 +418,15 @@ public sealed class ChunkMesher
         {
             AddLiquid(type, x, y, z, pos);
             return;
+        }
+
+        // Orientation : lue dans l'état du bloc
+        curOrient = info.orientation;
+        curState = 0;
+        if (curOrient != Orientation.None)
+        {
+            TryCell(x, y, z, out _, out byte orientState);
+            curState = BlockOrientation.Clamp(curOrient, orientState);
         }
 
         // ---------- Rendu ----------
@@ -421,12 +453,16 @@ public sealed class ChunkMesher
                 FillNeighbors(x, y, z);
                 for (int f = 0; f < 6; f++)
                 {
-                    if (!BlockDatabase.ShouldDrawFace(type, nb[f])) continue;
+                    if (!BlockDatabase.ShouldDrawFace(type, nb[DstFace(f)])) continue;
                     AddBoxFace(buf.vertices, buf.triangles, buf.normals, buf.uvs, pos,
                                Vector3.zero, Vector3.one, f, BlockDatabase.GetTile(type, f));
                 }
                 break;
         }
+
+        // Bloc tourné : on tourne ce qu'on vient de dessiner (les textures suivent la géométrie)
+        if (curState != 0 && buf.vertices.Count > vertStart)
+            RotateAdded(buf.vertices, buf.normals, vertStart, pos);
 
         if (info.lightMode != LightMode.Pixel && buf.vertices.Count > vertStart)
             buf.litRanges.Add(new Vector3Int(vertStart, buf.vertices.Count, (int)info.lightMode));
@@ -445,6 +481,7 @@ public sealed class ChunkMesher
         }
         else if (info.selectionBoxes != null)
         {
+            int colStart = buf.colVerts.Count;
             Vector3 off = Vector3.zero;
             if (info.shape == BlockShape.Cross && info.randomOffset)
                 off = PlantOffsetAt(originX + x, originZ + z);
@@ -457,6 +494,8 @@ public sealed class ChunkMesher
                 for (int f = 0; f < 6; f++)
                     AddBoxFace(buf.colVerts, buf.colTris, null, null, pos, bmin, bmax, f, 0);
             }
+
+            if (curState != 0) RotateAdded(buf.colVerts, null, colStart, pos);
         }
     }
 
@@ -703,7 +742,7 @@ public sealed class ChunkMesher
                 // Une face posée contre le bord du bloc est inutile si le voisin la cache
                 if (IsFlush(el.min, el.max, f))
                 {
-                    BlockType nb = Neighbor(x, y, z, f);
+                    BlockType nb = Neighbor(x, y, z, DstFace(f));
                     if (BlockDatabase.IsOpaque(nb)) continue;
 
                     // Même bloc voisin : les deux faces ne se touchent que si ce bloc a une face contre le
@@ -730,7 +769,7 @@ public sealed class ChunkMesher
             // Face cachée par un voisin opaque
             if (q.cullFace >= 0)
             {
-                BlockType nb = Neighbor(x, y, z, q.cullFace);
+                BlockType nb = Neighbor(x, y, z, DstFace(q.cullFace));
                 if (BlockDatabase.IsOpaque(nb)) continue;
                 if (nb == type && info.cullSameType) continue;
             }
@@ -774,6 +813,30 @@ public sealed class ChunkMesher
 
     // Couleur des sommets : R = lumière des torches, G = lumière du ciel (niveau x 17), B = occlusion ambiante,
     // A = mode d'éclairage (déjà rempli)
+    void SplitTranslucent()
+    {
+        if (!BlockDatabase.HasTranslucentTiles) return;
+        List<int> src = buf.triangles;
+        int perRow = BlockDatabase.AtlasTilesPerRow;
+        int keep = 0;
+        for (int i = 0; i + 2 < src.Count; i += 3)
+        {
+            Vector2 a = buf.uvs[src[i]], b = buf.uvs[src[i + 1]], c = buf.uvs[src[i + 2]];
+            float u = (a.x + b.x + c.x) / 3f, v = (a.y + b.y + c.y) / 3f;
+            int col = Mathf.Clamp((int)(u * perRow), 0, perRow - 1);
+            int row = Mathf.Clamp((int)((1f - v) * perRow), 0, perRow - 1);
+            if (BlockDatabase.IsTranslucentTile(row * perRow + col))
+            {
+                buf.translucentTriangles.Add(src[i]); buf.translucentTriangles.Add(src[i + 1]); buf.translucentTriangles.Add(src[i + 2]);
+            }
+            else
+            {
+                src[keep++] = src[i]; src[keep++] = src[i + 1]; src[keep++] = src[i + 2];
+            }
+        }
+        src.RemoveRange(keep, src.Count - keep);
+    }
+
     void ApplyVertexLight()
     {
         List<Vector3> verts = buf.vertices;
