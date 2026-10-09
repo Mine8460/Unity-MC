@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 // Inventaire du joueur : 9 cases de barre d'accès + 27 cases d'inventaire, piles de 64 maximum.
 // À mettre sur le GameObject du joueur.
@@ -20,7 +21,6 @@ public class Inventory : MonoBehaviour
 
     [Header("Touches")]
     [SerializeField] KeyCode toggleKey = KeyCode.E;
-    [SerializeField] KeyCode dropKey = KeyCode.G;   // Ctrl + touche : toute la pile
 
     [Header("Départ")]
     [Tooltip("Donne des objets de test au premier lancement (sans sauvegarde)")]
@@ -62,6 +62,7 @@ public class Inventory : MonoBehaviour
     // Cycle de vie
     // ------------------------------------------------------------------
 
+    InputAction dropAction;
     void Awake()
     {
         IsOpen = false;
@@ -70,6 +71,11 @@ public class Inventory : MonoBehaviour
         if (cameraTransform == null && Camera.main != null) cameraTransform = Camera.main.transform;
 
         if (!Load()) GiveStartItems();
+    }
+
+    private void Start()
+    {
+        dropAction = InputSystem.actions.FindAction("Drop");
     }
 
     static T FindFirst<T>() where T : UnityEngine.Object
@@ -150,7 +156,7 @@ public class Inventory : MonoBehaviour
         if (wheel > 0f) Select(selected - 1);
         else if (wheel < 0f) Select(selected + 1);
 
-        if (Input.GetKeyDown(dropKey)) DropSelected(Input.GetKey(KeyCode.LeftControl));
+        if (dropAction.WasPressedThisFrame()) DropSelected(Input.GetKey(KeyCode.LeftControl));
     }
 
     void OnApplicationQuit()

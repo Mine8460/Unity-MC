@@ -35,6 +35,8 @@ public class MobSpawner : MonoBehaviour
 
     float timer;
 
+    public bool SpawnEnabled { get { return spawnEnabled; } set { spawnEnabled = value; } }
+
     void Start()
     {
         if (world == null) world = Find<World>();

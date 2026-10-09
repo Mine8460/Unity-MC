@@ -28,6 +28,11 @@ public class ItemEntity : MonoBehaviour
     public ItemType Type => stack.type;
     public int Count => stack.count;
 
+    public static readonly System.Collections.Generic.List<ItemEntity> All = new System.Collections.Generic.List<ItemEntity>();
+
+    void OnEnable() { All.Add(this); }
+    void OnDisable() { All.Remove(this); }
+
     public void Init(World world, ItemStack stack, Vector3 velocity, float pickupDelay)
     {
         this.world = world;

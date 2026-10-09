@@ -8,6 +8,8 @@ public class Mob : MonoBehaviour
     public static readonly List<Mob> All = new List<Mob>();
 
     public MobDefinition def;
+    public Vector3 Facing { get { return body != null ? body.forward : transform.forward; } }
+    public float Health { get { return health; } }
 
     World world;
     PlayerStats target;

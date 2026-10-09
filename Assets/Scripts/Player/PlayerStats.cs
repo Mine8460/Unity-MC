@@ -159,12 +159,7 @@ public class PlayerStats : MonoBehaviour
 
     void UpdateAir(float dt)
     {
-        if (player.EyeUnder
-            
-            
-            
-            
-            )
+        if (player.EyeUnderwater)
         {
             air -= dt;
             if (air <= 0f)
